@@ -213,6 +213,8 @@ def main() -> int:
             agi.set_var(f"RD_PAGE_{i}", line)
         agi.set_var("RD_IDLE", str(cfg["idle_sec"]))
         agi.set_var("RD_NUM", cfg["number"])
+        # 고르는 동안 전부 미리 데워 둡니다. 어느 번호를 눌러도 즉시 나옵니다.
+        R.mark_all([s["cls"] for s in stations], uid)
         agi.set_var("RD_OK", "1")
         log(f"MENU ext={ext} 채널 {len(stations)}개 {len(pg)}화면 rate={cfg['rate']}")
         return 0

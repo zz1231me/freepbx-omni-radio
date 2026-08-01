@@ -172,6 +172,28 @@ def mark(cls: str, uid: str) -> None:
     as_asterisk(d / uid)
 
 
+def mark_all(classes: list[str], uid: str) -> None:
+    """메뉴를 보여 주는 동안 모든 채널을 미리 데웁니다.
+
+    찬 채널은 방송에 붙는 데 1~2초 걸립니다. 그런데 메뉴를 읽고 번호를 고르는
+    데도 어차피 몇 초가 걸립니다. 그동안 미리 붙여 두면 어느 번호를 누르든
+    소리가 곧바로 나옵니다.
+
+    비용은 메뉴를 보는 몇 초 동안만 채널 수만큼 받는 것뿐입니다. 번호를 고르는
+    순간 mark() 가 나머지를 거두고, 안 고르고 끊어도 h 확장에서 다 거둡니다.
+    """
+    if not uid:
+        return
+    unmark(uid)
+    for cls in classes:
+        d = LIVE / cls
+        d.mkdir(parents=True, exist_ok=True)
+        (d / uid).write_text(str(int(time.time())), encoding="utf-8")
+        as_asterisk(d)
+        as_asterisk(d / uid)
+    as_asterisk(LIVE)
+
+
 def unmark(uid: str) -> None:
     """이 통화의 표시를 전부 거둡니다. 어느 채널이었는지 몰라도 됩니다."""
     if not uid:
