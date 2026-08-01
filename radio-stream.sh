@@ -2,7 +2,7 @@
 #==============================================================================
 # 라디오 스트림 한 개를 Asterisk 가 먹을 수 있는 생(raw) 오디오로 흘려보냅니다.
 #
-#   radio-stream.sh <URL> <레이트> <게인dB> <클래스> <상태폴더> <모드> <여운초> <만료분>
+#   radio-stream.sh <URL> <레이트> <게인dB> <클래스> <상태폴더> <모드> <여운초> <만료분> <보정>
 #
 # 직접 부를 일은 없습니다. musiconhold_custom.conf 의 application= 줄로
 # Asterisk 가 대신 실행합니다. radio-gen.py 가 그 줄을 만듭니다.
@@ -56,6 +56,7 @@ ROOT="${5:-/var/lib/asterisk/radio}"
 MODE="${6:-always}"       # ondemand | always
 LINGER="${7:-300}"        # 마지막 청취자가 끊고 나서 더 받아 두는 초
 STALE_MIN="${8:-180}"     # 이보다 오래된 청취자 표시는 죽은 통화로 봅니다
+AUDIO="${9:-off}"         # off | soft | clear  (소리 보정)
 
 LIVE="$ROOT/live/$CLS"
 STATUS="$ROOT/status/$CLS"
@@ -87,8 +88,27 @@ trap finish TERM INT HUP QUIT EXIT
 # 명령을 배열로 미리 조립해 둡니다.
 #   set -u 아래에서 빈 배열을 "${A[@]}" 로 펴면 옛 bash 가 unbound 로 죽습니다.
 #   조건부 인자(-af)는 이렇게 미리 붙여 두는 편이 안전합니다.
+# --- 소리 보정 필터 조립 -----------------------------------------------------
+#   방송은 보통 44.1kHz 로 오고 전화는 16kHz 입니다. 그 사이를 어떤 방법으로
+#   줄이느냐로 소리가 달라집니다. soxr 이 있으면 그걸 씁니다 (없는 빌드도
+#   있어서 한 번 시험해 보고 정합니다 — 없는데 그냥 쓰면 ffmpeg 가 죽습니다).
+FILTERS=()
+[[ "$GAIN" != "0" && -n "$GAIN" ]] && FILTERS+=("volume=${GAIN}dB")
+if [[ "$AUDIO" == "soft" || "$AUDIO" == "clear" ]]; then
+  # 전화가 못 내는 낮은 소리를 걷어냅니다. 그만큼 나머지에 여유가 생깁니다.
+  FILTERS+=("highpass=f=80")
+  [[ "$AUDIO" == "clear" ]] && FILTERS+=("dynaudnorm=f=400:g=15:p=0.9")
+  if ffmpeg -hide_banner -v error -f lavfi -i anullsrc=r=44100 \
+       -af "aresample=resampler=soxr:osr=${RATE}" -t 0.05 -f null - 2>/dev/null; then
+    FILTERS+=("aresample=resampler=soxr:osr=${RATE}")
+    say "리샘플러 soxr 사용"
+  else
+    say "soxr 이 없어 기본 리샘플러를 씁니다 (ffmpeg 빌드에 libsoxr 없음)"
+  fi
+fi
+
 if [[ "${RADIO_PLAYER:-ffmpeg}" == "mpg123" ]]; then
-  # MP3 전용. ffmpeg 보다 가볍지만 AAC/HLS 는 못 읽고 게인도 못 줍니다.
+  # MP3 전용. ffmpeg 보다 가볍지만 AAC/HLS 도 보정도 못 합니다.
   CMD=(mpg123 -q -r "$RATE" -f 8192 -b 2048 --mono -s "$URL")
 else
   # -reconnect 세 줄이 짧은 끊김은 ffmpeg 안에서 알아서 이어 붙입니다.
@@ -96,7 +116,10 @@ else
   CMD=(ffmpeg -nostdin -loglevel error
        -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5
        -i "$URL" -vn)
-  [[ "$GAIN" != "0" && -n "$GAIN" ]] && CMD+=(-af "volume=${GAIN}dB")
+  if (( ${#FILTERS[@]} )); then
+    CHAIN=$(IFS=,; echo "${FILTERS[*]}")
+    CMD+=(-af "$CHAIN")
+  fi
   CMD+=(-f s16le -acodec pcm_s16le -ar "$RATE" -ac 1 -)
 fi
 
@@ -111,24 +134,16 @@ else
   now() { NOW=$(date +%s); }                # 옛 bash 대비
 fi
 
-# 청취자 표시를 셉니다. 없으면 glob 이 안 풀려 원본 문자열이 오므로 -e 로 거릅니다.
-#   N   진짜 청취자 (이 채널을 골라서 듣고 있음)
-#   NW  미리 데우기 (메뉴를 보는 중. 아직 안 골랐음)
-# 둘을 나누는 이유는 여운 때문입니다. 고르지 않은 채널까지 5분을 더 받으면
-# 통화 한 번에 채널 넷이 헛돕니다.
+# 청취자 표시 개수. 없으면 glob 이 안 풀려 원본 문자열이 오므로 -e 로 걸러집니다.
 count_listeners() {
   local f
-  N=0; NW=0
+  N=0
   for f in "$LIVE"/*; do
-    [[ -e "$f" ]] || continue
-    case "$f" in
-      *.warm) NW=$((NW + 1)) ;;
-      *)      N=$((N + 1)) ;;
-    esac
+    [[ -e "$f" ]] && N=$((N + 1))
   done
 }
 
-say "대기 시작 rate=${RATE} gain=${GAIN}dB mode=${MODE} 여운=${LINGER}초"
+say "대기 시작 rate=${RATE} gain=${GAIN}dB 보정=${AUDIO} mode=${MODE} 여운=${LINGER}초"
 state idle
 
 LAST_LISTENER=0        # 마지막으로 사람이 있었던 시각
@@ -152,15 +167,8 @@ while :; do
       find "$LIVE" -type f -mmin "+${STALE_MIN}" -delete 2>/dev/null
     fi
     count_listeners
-    # 여운은 '진짜로 듣던 사람' 이 나갔을 때만 줍니다. 미리 데우기만 있다가
-    # 사라진 채널(=고르지 않은 채널)은 LAST_LISTENER 가 안 올라가 있으므로
-    # 곧바로 멈춥니다.
     (( N > 0 )) && LAST_LISTENER=$NOW
-    if (( N > 0 || NW > 0 || NOW - LAST_LISTENER < LINGER )); then
-      WANT=1
-    else
-      WANT=0
-    fi
+    if (( N > 0 || NOW - LAST_LISTENER < LINGER )); then WANT=1; else WANT=0; fi
   fi
 
   # --- 돌던 것이 죽었으면 거둡니다 ------------------------------------------
@@ -188,11 +196,7 @@ while :; do
     wait "$CHILD" 2>/dev/null
     CHILD=""
     state idle
-    if (( LAST_LISTENER > 0 )); then
-      say "듣는 사람이 없어 멈춥니다 (여운 ${LINGER}초 지남)"
-    else
-      say "안 고른 채널이라 바로 멈춥니다 (미리 데우기만 했음)"
-    fi
+    say "듣는 사람이 없어 멈춥니다 (여운 ${LINGER}초 지남)"
   fi
 
   # 쉬고 있을 때는 촘촘히 봅니다 — 사람이 채널을 누르고 소리가 날 때까지의

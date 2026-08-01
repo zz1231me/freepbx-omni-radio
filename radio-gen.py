@@ -71,7 +71,7 @@ def probe(st: dict, cfg: dict, seconds: int = 5) -> tuple[bool, str]:
     try:
         p = subprocess.Popen(
             [R.STREAM_SH, st["url"], str(rate), str(st["gain"]),
-             "check", tmp, "always", "0", "180"],
+             "check", tmp, "always", "0", "180", cfg["audio"]],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     except OSError as e:
         shutil.rmtree(tmp, ignore_errors=True)

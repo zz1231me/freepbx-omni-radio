@@ -16,6 +16,7 @@
     RD_PAGES     채널 목록의 화면 수      (menu 에서만)
     RD_PAGE_1..N 화면마다 보여 줄 한 줄    (menu 에서만)
     RD_IDLE      듣는 중 무입력으로 끊을 때까지의 초   (menu 에서만)
+    RD_MAX       아무리 오래 들어도 끊는 초            (menu 에서만)
     RD_NUM       이 서비스의 번호 (화면에 발신번호로 뜹니다)  (menu 에서만)
 
 통화ID(${UNIQUEID}) 를 받는 이유
@@ -213,8 +214,7 @@ def main() -> int:
             agi.set_var(f"RD_PAGE_{i}", line)
         agi.set_var("RD_IDLE", str(cfg["idle_sec"]))
         agi.set_var("RD_NUM", cfg["number"])
-        # 고르는 동안 전부 미리 데워 둡니다. 어느 번호를 눌러도 즉시 나옵니다.
-        R.mark_all([s["cls"] for s in stations], uid)
+        agi.set_var("RD_MAX", str(cfg["max_sec"]))
         agi.set_var("RD_OK", "1")
         log(f"MENU ext={ext} 채널 {len(stations)}개 {len(pg)}화면 rate={cfg['rate']}")
         return 0

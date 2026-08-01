@@ -31,11 +31,9 @@ NUM_MARK = "; omni-radio-number"
 NUM_CTX = "from-internal-custom"
 
 # 지금 누가 무엇을 듣고 있나. 스트림 껍데기가 이 폴더만 보고 켜고 끕니다.
-#   live/<클래스>/<통화ID>        진짜 청취자 (이 채널을 듣고 있음)
-#   live/<클래스>/<통화ID>.warm   미리 데우기 (메뉴를 보는 중, 아직 안 고름)
+#   live/<클래스>/<통화ID>   이 통화가 이 채널을 듣고 있음
 #   status/<클래스>          up | idle | down | stopped  + 시각 + 사유
 LIVE = STATE / "live"
-WARM = ".warm"      # 미리 데우는 중이라는 표시 (진짜 청취자와 구분)
 STATUS = STATE / "status"
 
 BEGIN = ";;; ===== OMNI-RADIO BEGIN (radio-gen.py 가 만듭니다. 직접 고치지 마세요) ====="
@@ -46,7 +44,14 @@ END = ";;; ===== OMNI-RADIO END ====="
 DISP_WIDTH = int(os.getenv("RADIO_DISP_WIDTH", "28"))
 DEFAULT_NUMBER = "7200"
 DEFAULT_IDLE = 7200
-DEFAULT_LINGER = 300
+DEFAULT_LINGER = 60
+DEFAULT_MAX = 10800      # 3시간
+# 소리 보정. 전화는 대역이 좁아서(G.722 기준 50~7000Hz) 손댈 여지가 있습니다.
+#   off    아무것도 안 함
+#   soft   낮은 잡음을 걷어내고 리샘플링을 좋은 것으로 (권장. 부작용이 없습니다)
+#   clear  거기에 음량 고르기까지. 작은 소리가 잘 들리는 대신 조용한 구간이 떠오릅니다
+AUDIO_PRESETS = ("off", "soft", "clear")
+
 KEYS = "123456789"          # 0 과 * 는 목록, # 는 종료라 채널로 못 씁니다
 
 
@@ -90,11 +95,18 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
         "number": number,
         "idle_sec": num("idle_sec", DEFAULT_IDLE, 60, 86400),
         "linger_sec": num("linger_sec", DEFAULT_LINGER, 0, 3600),
+        # 아무리 오래 들어도 여기서는 끊습니다. 전화기를 내려놓는 걸 잊거나
+        # 수화기가 눌린 채로 있으면 통화가 하루 종일 살아 있게 됩니다.
+        "max_sec": num("max_sec", DEFAULT_MAX, 300, 86400),
+        "audio": str(data.get("audio", "soft")).strip().lower(),
         "on_demand": data.get("on_demand", True) is not False,
     }
     # 청취자 표시가 이보다 오래되면 죽은 통화로 봅니다. 통화는 idle_sec 이면
     # 어차피 끊기므로 그보다 넉넉히 잡으면 살아 있는 통화를 지울 일이 없습니다.
     cfg["stale_min"] = cfg["idle_sec"] // 60 + 60
+
+    if cfg["audio"] not in AUDIO_PRESETS:
+        raise BadConfig(f"audio 는 {' / '.join(AUDIO_PRESETS)} 중 하나입니다: {cfg['audio']!r}")
 
     raw = data.get("stations")
     if not isinstance(raw, list) or not raw:
@@ -174,47 +186,22 @@ def mark(cls: str, uid: str) -> None:
     as_asterisk(d / uid)
 
 
-def mark_all(classes: list[str], uid: str) -> None:
-    """메뉴를 보여 주는 동안 모든 채널을 미리 데웁니다.
-
-    찬 채널은 방송에 붙는 데 1~2초 걸립니다. 그런데 메뉴를 읽고 번호를 고르는
-    데도 어차피 몇 초가 걸립니다. 그동안 미리 붙여 두면 어느 번호를 누르든
-    소리가 곧바로 나옵니다.
-
-    표시를 .warm 으로 남기는 게 중요합니다. 껍데기는 이걸 '진짜 청취자' 와
-    구분해서, 고르지 않은 채널은 여운 없이 곧바로 멈춥니다. 안 그러면 통화
-    한 번에 고르지도 않은 채널 넷이 5분씩 더 받습니다.
-    """
-    if not uid:
-        return
-    unmark(uid)
-    for cls in classes:
-        d = LIVE / cls
-        d.mkdir(parents=True, exist_ok=True)
-        (d / (uid + WARM)).write_text(str(int(time.time())), encoding="utf-8")
-        as_asterisk(d)
-        as_asterisk(d / (uid + WARM))
-    as_asterisk(LIVE)
-
-
 def unmark(uid: str) -> None:
-    """이 통화의 표시를 전부 거둡니다 (미리 데우던 것까지).
-    어느 채널이었는지 몰라도 됩니다."""
+    """이 통화의 표시를 거둡니다. 어느 채널이었는지 몰라도 됩니다."""
     if not uid:
         return
     try:
         for d in LIVE.iterdir():
-            for f in (d / uid, d / (uid + WARM)):
-                if f.exists():
-                    f.unlink(missing_ok=True)
+            f = d / uid
+            if f.exists():
+                f.unlink(missing_ok=True)
     except OSError:
         pass
 
 
 def listeners(cls: str) -> int:
-    """진짜로 듣고 있는 사람 수. 미리 데우는 중인 것은 안 셉니다."""
     try:
-        return sum(1 for f in (LIVE / cls).iterdir() if not f.name.endswith(WARM))
+        return sum(1 for _ in (LIVE / cls).iterdir())
     except OSError:
         return 0
 
@@ -313,7 +300,8 @@ def render(stations: list[dict], cfg: dict) -> str:
                   "mode=custom",
                   f"format={fmt}",
                   f"application={STREAM_SH} {st['url']} {cfg['rate']} {st['gain']} "
-                  f"{st['cls']} {STATE} {mode} {cfg['linger_sec']} {cfg['stale_min']}",
+                  f"{st['cls']} {STATE} {mode} {cfg['linger_sec']} {cfg['stale_min']} "
+                  f"{cfg['audio']}",
                   ""]
     lines.append(END)
     return "\n".join(lines) + "\n"
