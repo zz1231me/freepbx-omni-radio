@@ -150,6 +150,7 @@ sudo radio-gen.py --del 6
   "linger_sec": 0,
   "max_sec": 10800,
   "audio": "clear",
+  "gain_db": 0,
   "start_wait_ms": 1000,
   "stations": [
     { "key": "1", "name": "YTN라디오", "url": "https://radiolive.ytn.co.kr/...", "gain_db": 0 }
@@ -163,8 +164,9 @@ sudo radio-gen.py --del 6
 | `key` | 채널 번호. **1~9** 만 (0 과 `*` 는 목록, `#` 는 종료라 못 씁니다) |
 | `name` | 화면에 뜨는 이름. 한글 8자 안쪽이 잘 보입니다 |
 | `url` | 스트림 주소. MP3 / AAC / OGG / HLS 다 됩니다 (ffmpeg 가 읽습니다) |
-| `gain_db` | 방송국끼리 음량 맞추기. 작으면 `3`, 크면 `-3` 정도 |
-| `rate` | `16000` (G.722) 또는 `8000` (G.711 만 쓰는 환경) |
+| `gain_db` (채널 안) | 그 방송만 음량 조절 |
+| `gain_db` (맨 위) | 전체 음량. 보정이 크게 들리면 여기서 `-3` |
+| `rate` | 전화기와 붙는 코덱에 맞춥니다. **`8000`** = ulaw/alaw, **`16000`** = g722 |
 | `idle_sec` | 듣는 중 아무것도 안 누를 때 끊기까지의 초 |
 | `on_demand` | `true` 면 듣는 사람이 있을 때만 받습니다 |
 | `linger_sec` | 마지막 사람이 끊고도 더 받아 두는 초 (기본 0 = 듣는 것만 받음) |
@@ -193,6 +195,27 @@ sudo radio-gen.py --del 6
 - **국방FM** — `https://mediaworks.dema.mil.kr/live_edge/audio.sdp/playlist.m3u8`
 - AFN 이 AAC 로 안 붙으면 MP3 판이 있습니다 — 주소 끝을 `AFNP_OSN.mp3` 로
 
+### 코덱에 `rate` 를 맞추세요
+
+전화기와 실제로 붙는 코덱을 통화 중에 확인합니다.
+
+```bash
+sudo asterisk -rx 'core show channels verbose'
+```
+
+| 붙는 코덱 | `rate` | 들리는 대역 |
+|---|---|---|
+| `ulaw` / `alaw` (G.711) | **8000** | ~3.4kHz |
+| `g722` | **16000** | ~7kHz |
+
+안 맞아도 소리는 나옵니다 — Asterisk 가 알아서 줄이거나 늘립니다. 다만 그
+변환을 **ffmpeg 의 soxr 이 하는 편이 낫습니다.** 16000 으로 만들어 놓고
+ulaw 로 나가면 Asterisk 가 한 번 더 줄이느라 품질도 손해, CPU 도 손해입니다.
+
+`g722` 가 붙는다면 그대로 두세요. 대역이 두 배라 **코덱을 바꾸는 게 어떤
+보정보다 큰 차이**입니다. 요즘 SIP 전화기는 대부분 지원하니, ulaw 로 붙고
+있다면 FreePBX 의 SIP Settings 와 내선 설정에서 g722 를 켜 볼 만합니다.
+
 ### 소리 보정
 
 전화는 대역이 좁습니다(G.722 기준 50~7000Hz). 그 안에서 나아질 여지가 있어
@@ -202,7 +225,7 @@ sudo radio-gen.py --del 6
 |---|---|
 | `off` | 아무것도 안 함 |
 | `soft` | 낮은 소리를 걷어내고(`highpass=80`) 44.1kHz→16kHz 줄이기를 **soxr** 로 합니다 |
-| **`clear`** (기본) | 거기에 음량 고르기(`dynaudnorm`)와 말이 또렷해지는 중고음 보강(2.2kHz +3dB)까지 |
+| **`clear`** (기본) | 말이 또렷해지는 중고음 보강(2.2kHz +3dB) 뒤에 음량 고르기(`dynaudnorm`) |
 
 **`soft` 는 귀로 티가 나는 설정이 아닙니다.** 7kHz 까지밖에 안 들리는 전화
 대역에서, 원본이 AAC 64~128kbps 면 soxr 과 기본 리샘플러의 차이는 거의
@@ -210,7 +233,20 @@ sudo radio-gen.py --del 6
 
 그래서 **기본은 `clear`** 입니다. 음량이 고르게 되고 말이 또렷해져서 전화로
 들을 때 실질적인 차이가 납니다. 다만 음량을 끌어올리는 만큼 **조용한 구간의
-잡음도 같이 떠오릅니다.** 음악 방송에서 그게 거슬리면 `soft` 로 내리세요. **soxr 은 ffmpeg 빌드에
+잡음도 같이 떠오릅니다.** 음악 방송에서 그게 거슬리면 `soft` 로 내리세요.
+
+**너무 크게 들리면 맨 위 `gain_db` 를 `-3` 쯤 내리세요.** `dynaudnorm` 은
+조용한 부분을 끌어올리는 게 일이라 원래 커집니다. 여기서는 목표 크기를 75%,
+끌어올리는 상한을 4배로 묶어 뒀지만(그냥 두면 10배까지 갑니다) 그래도
+원본보다는 큽니다.
+
+#### 왜 `loudnorm` (EBU R128) 을 안 쓰나
+
+방송 표준은 `loudnorm` 으로 -16 ~ -23 LUFS 를 맞추는 것이고, 그게 정석입니다.
+다만 실시간에서는 **앞을 3초쯤 미리 봐야** 해서 그만큼 늦게 나옵니다.
+이 라디오는 번호를 누르면 바로 채널이 바뀌는 게 핵심이라, 채널을 돌릴 때마다
+3초를 더 기다리는 쪽을 택하지 않았습니다. `dynaudnorm` 은 표준은 아니지만
+앞을 안 봐도 돼서 즉시 나옵니다. **soxr 은 ffmpeg 빌드에
 없을 수도 있어서, 껍데기가 시작할 때 한 번 시험해 보고 없으면 기본
 리샘플러로 넘어갑니다.** 어느 쪽을 썼는지는 로그에 남습니다.
 
@@ -246,6 +282,107 @@ KBS 는 CloudFront 서명(`Policy=`), SBS 는 JWT(`token=`), MBC 는 세션
 Cloudflare Workers 로 그런 걸 돌립니다). 다만 **남이 개인적으로 돌리는
 서비스**라 내려가면 그날로 안 나오고, 라이선스나 이용약관이 적혀 있지
 않습니다. 집에서 혼자 듣는 정도를 넘어선다면 권하지 않습니다.
+
+---
+
+## 자주 쓰는 명령
+
+### 보기
+
+```bash
+sudo radio-gen.py --status
+```
+지금 무엇이 돌고 누가 듣고 있나. **통화가 없으면 ffmpeg 0개가 정상입니다.**
+
+```bash
+sudo radio-verify.sh
+```
+여섯 군데를 점검합니다. 뭔가 이상할 때 제일 먼저.
+
+```bash
+sudo radio-gen.py
+```
+등록된 채널 목록과 지금 설정.
+
+### 고치기
+
+```bash
+sudo nano /etc/asterisk/radio-stations.json
+```
+채널·설정 전부. **저장하면 몇 초 뒤 알아서 반영됩니다.**
+
+```bash
+sudo radio-gen.py --add 6 국악방송 http://mgugaklive.nowcdn.co.kr/gugakradio/gugakradio.stream/playlist.m3u8
+```
+채널 추가 — 넣고, 실제로 틀어 보고, 반영까지 한 번에.
+
+```bash
+sudo radio-gen.py --del 6
+```
+채널 삭제.
+
+```bash
+sudo radio-gen.py --find 교통방송
+```
+주소를 모를 때. 찾아서 `--add` 명령까지 만들어 줍니다.
+
+### 소리 조절 (저장 즉시 반영)
+
+```bash
+sudo sed -i 's/"audio": "clear"/"audio": "soft"/' /etc/asterisk/radio-stations.json
+```
+보정을 약하게. 되돌릴 땐 `soft` 와 `clear` 를 바꿔서.
+
+```bash
+sudo sed -i 's/"gain_db": 0/"gain_db": -3/' /etc/asterisk/radio-stations.json
+```
+전체 음량 낮추기.
+
+```bash
+sudo sed -i 's/"rate": 16000/"rate": 8000/' /etc/asterisk/radio-stations.json
+```
+uLaw 로 붙을 때. g722 면 `16000` 그대로.
+
+### 로그
+
+```bash
+tail -f /var/log/asterisk/radio.log
+```
+누가 언제 뭘 들었나.
+
+```bash
+tail -f /var/log/asterisk/radio-stream.log
+```
+스트림이 켜지고 꺼지고 다시 붙은 기록.
+
+```bash
+grep -E "리샘플러|대기 시작" /var/log/asterisk/radio-stream.log | tail
+```
+어떤 보정과 리샘플러가 걸려 있나.
+
+### Asterisk 쪽
+
+```bash
+sudo asterisk -rx 'core show channels verbose'
+```
+통화 중에 실제로 붙은 코덱 확인 (`rate` 를 여기에 맞춥니다).
+
+```bash
+sudo asterisk -rx 'moh show classes'
+```
+채널이 Asterisk 에 제대로 올라갔나.
+
+### 업데이트
+
+```bash
+cd ~/freepbx-omni-radio && git pull && sudo ./install-radio.sh --no-check
+```
+
+```bash
+sudo install -m 0664 -o asterisk -g asterisk ~/freepbx-omni-radio/stations.json /etc/asterisk/radio-stations.json
+```
+설정 파일은 설치할 때 안 덮어씁니다. 새 기본값을 쓰려면 이걸 따로.
+**채널을 손대셨다면 덮어쓰지 마세요.**
 
 ---
 

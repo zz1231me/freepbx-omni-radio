@@ -88,9 +88,14 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
             raise BadConfig(f"{key} 는 숫자여야 합니다") from None
         return max(lo, min(v, hi))
 
+    # rate 는 전화기와 실제로 붙는 코덱에 맞춰야 합니다.
+    #   ulaw / alaw (G.711)  -> 8000
+    #   g722                 -> 16000
+    # 안 맞으면 Asterisk 가 한 번 더 줄이거나 늘립니다. 소리가 안 나오진
+    # 않지만, 그 변환을 ffmpeg 의 soxr 이 하는 것보다 못합니다.
     rate = int(data.get("rate", 16000)) if str(data.get("rate", 16000)).isdigit() else 0
     if rate not in (8000, 16000):
-        raise BadConfig(f"rate 는 8000 또는 16000 입니다: {data.get('rate')!r}")
+        raise BadConfig(f"rate 는 8000(ulaw/alaw) 또는 16000(g722) 입니다: {data.get('rate')!r}")
 
     number = str(data.get("number", DEFAULT_NUMBER)).strip()
     if not re.match(r"^\*?\d{2,6}$", number):
@@ -108,6 +113,9 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
         # 번호를 누르고 소리가 나기까지 쉬는 시간. 곧바로 나면 놀랍니다.
         # 찬 채널이 방송에 붙는 시간도 이 사이에 묻힙니다.
         "start_wait_ms": num("start_wait_ms", DEFAULT_WAIT_MS, 0, 5000),
+        # 전체 음량. 채널마다 두는 gain_db 와 더해집니다.
+        # 보정이 너무 크게 들리면 여기서 -3 쯤 내리는 게 제일 간단합니다.
+        "gain_db": num("gain_db", 0, -20, 20),
         "on_demand": data.get("on_demand", True) is not False,
     }
     # 청취자 표시가 이보다 오래되면 죽은 통화로 봅니다. 통화는 idle_sec 이면
@@ -308,7 +316,8 @@ def render(stations: list[dict], cfg: dict) -> str:
                   f"[{st['cls']}]",
                   "mode=custom",
                   f"format={fmt}",
-                  f"application={STREAM_SH} {st['url']} {cfg['rate']} {st['gain']} "
+                  f"application={STREAM_SH} {st['url']} {cfg['rate']} "
+                  f"{cfg['gain_db'] + st['gain']} "
                   f"{st['cls']} {STATE} {mode} {cfg['linger_sec']} {cfg['stale_min']} "
                   f"{cfg['audio']}",
                   ""]
