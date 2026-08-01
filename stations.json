@@ -3,15 +3,16 @@
     "여기가 채널 목록의 유일한 원본입니다.  /etc/asterisk/radio-stations.json 으로 깔립니다.",
     "고치고 저장하면 몇 초 뒤 알아서 반영됩니다. 명령을 더 칠 필요도, Apply Config 도 없습니다.",
     "저장한 JSON 이 깨져 있으면 아무것도 안 바꾸고 옛 설정 그대로 계속 틉니다 (이유는 radio.log 에).",
-    "손으로 고치기 싫으면:  sudo radio-gen.py --add 4 재즈 https://...   /   --del 4",
+    "손으로 고치기 싫으면:  sudo radio-gen.py --add 6 국악방송 http://...   /   --del 6",
     "key 는 전화기에서 누를 숫자입니다. 1~9 만 됩니다 (0 과 * 는 목록, # 는 종료라 못 씁니다).",
     "name 은 전화기 화면에 뜨는 글자입니다. 한글 기준 8자 안쪽이 잘 보입니다.",
     "number 는 전화를 거는 번호입니다. 바꾸면 다이얼플랜의 그 한 줄도 같이 옮겨집니다.",
     "음량은 전화기 자체 볼륨으로 조절하세요. 방송국끼리의 음량 차이만 gain_db 로 맞춥니다 (작으면 3, 크면 -3).",
     "on_demand=true 면 듣는 사람이 있을 때만 방송을 받습니다. 아무도 안 들으면 대역폭이 0 입니다.",
     "linger_sec 는 마지막 사람이 끊고도 계속 받아 두는 시간입니다. 채널을 돌리다 돌아올 때 안 기다리게 합니다.",
-    "아래 URL 은 동작을 확인하기 위한 예시입니다. 반드시 --check 로 확인하고 본인 것으로 바꾸세요.",
-    "국내 지상파(KBS/MBC/SBS)는 재생할 때마다 서명이 붙는 주소라 고정 URL 이 없습니다. README 를 보세요."
+    "아래 주소는 2026-08 기준으로 열리는 것을 확인한 값입니다. 방송사가 개편하면 조용히 죽습니다.",
+    "안 나오면 화면에 (안나옴) 이 뜹니다.  sudo radio-gen.py --check  로 어느 채널인지 짚어 보세요.",
+    "KBS/MBC/SBS 는 재생할 때마다 서명·토큰이 붙는 주소라 여기에 적어 둘 수가 없습니다. README 를 보세요."
   ],
   "number": "7200",
   "rate": 16000,
@@ -21,20 +22,32 @@
   "stations": [
     {
       "key": "1",
-      "name": "그루브살롱",
-      "url": "https://ice1.somafm.com/groovesalad-128-mp3",
+      "name": "YTN라디오",
+      "url": "https://radiolive.ytn.co.kr/radio/_definst_/20211118_fmlive/playlist.m3u8",
       "gain_db": 0
     },
     {
       "key": "2",
-      "name": "드론존",
-      "url": "https://ice1.somafm.com/dronezone-128-mp3",
+      "name": "TBS FM",
+      "url": "https://cdnfm.tbs.seoul.kr/tbs/_definst_/tbs_fm_web_360.smil/chunklist.m3u8",
       "gain_db": 0
     },
     {
       "key": "3",
-      "name": "부트리커",
-      "url": "https://ice1.somafm.com/bootliquor-128-mp3",
+      "name": "EBS FM",
+      "url": "http://ebsonairiosaod.ebs.co.kr/fmradiobandiaod/bandiappaac/playlist.m3u8",
+      "gain_db": 0
+    },
+    {
+      "key": "4",
+      "name": "AFN한국",
+      "url": "https://playerservices.streamtheworld.com/api/livestream-redirect/AFNP_OSNAAC.aac",
+      "gain_db": 0
+    },
+    {
+      "key": "5",
+      "name": "아리랑라디오",
+      "url": "http://amdlive-ch03-ctnd-com.akamaized.net/arirang_3ch/arirang_3ch_audio/chunklist_b128000.m3u8",
       "gain_db": 0
     }
   ]

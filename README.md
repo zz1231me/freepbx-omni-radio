@@ -18,8 +18,9 @@
   7200 걺 ──▶ (콜백이 옴) ──▶  화면: 채널을 고르세요
                                       │
                                       ▼
-                              [1]그루브살롱 [2]드론존     ← 화면 폭에 맞춰
-                              [3]부트리커                    묶어서 넘김
+                              [1]YTN라디오 [2]TBS FM     ← 화면 폭에 맞춰
+                              [3]EBS FM [4]AFN한국          묶어서 넘김
+                              [5]아리랑라디오
                                       │
                               번호를 누르면
                                       ▼
@@ -30,8 +31,8 @@
 
 | 키 | 하는 일 | 화면 |
 |---|---|---|
-| **1~9** | 그 번호 채널로 (목록에서든 듣는 중이든) | `[2]드론존 >[*]목록` |
-| **\*** 또는 **0** | 채널 목록으로 (소리는 계속 나옵니다) | `채널을 고르세요` → `[1]그루브살롱 [2]드론존` |
+| **1~9** | 그 번호 채널로 (목록에서든 듣는 중이든) | `[2]TBS FM >[*]목록` |
+| **\*** 또는 **0** | 채널 목록으로 (소리는 계속 나옵니다) | `채널을 고르세요` → `[1]YTN라디오 [2]TBS FM` |
 | **#** | 종료 (어디서 누르든) | `라디오 종료` |
 | (무입력) | 목록에서 세 바퀴 / 듣는 중 기본 2시간이면 끊음 | |
 
@@ -50,7 +51,7 @@
 **없는 번호를 눌러도 통화는 안 끊깁니다.** 화면으로 알리고, 그 2초 동안에도
 제대로 된 번호를 누르면 바로 먹습니다.
 
-**소리가 안 날 것 같으면 화면이 미리 알려 줍니다.** `[3]부트리커 (안나옴)` 은
+**소리가 안 날 것 같으면 화면이 미리 알려 줍니다.** `[3]EBS FM (안나옴)` 은
 방송국에 못 붙고 있다는 뜻, `(준비안됨)` 은 스트림이 안 떠 있다는 뜻입니다.
 조용한 이유를 모르는 것이 제일 나쁩니다.
 
@@ -119,11 +120,11 @@ tail /var/log/asterisk/radio.log
 이쪽은 넣기 전에 실제로 틀어 봅니다.
 
 ```bash
-sudo radio-gen.py --add 4 재즈 https://example.com/jazz   # 넣고, 틀어 보고, 반영까지
-sudo radio-gen.py --del 4                                 # 빼고 반영까지
+sudo radio-gen.py --add 6 국악방송 http://mgugaklive.nowcdn.co.kr/gugakradio/gugakradio.stream/playlist.m3u8
+sudo radio-gen.py --del 6
 ```
 
-이름에 공백이 있어도 따옴표 없이 됩니다 — `--add 4 재즈 클래식 방송 https://...`
+이름에 공백이 있어도 따옴표 없이 됩니다 — `--add 6 국악 방송 http://...`
 처럼 써도 주소를 기준으로 갈라 줍니다.
 
 ### 설정 항목
@@ -136,7 +137,7 @@ sudo radio-gen.py --del 4                                 # 빼고 반영까지
   "on_demand": true,
   "linger_sec": 300,
   "stations": [
-    { "key": "1", "name": "그루브살롱", "url": "https://...", "gain_db": 0 }
+    { "key": "1", "name": "YTN라디오", "url": "https://radiolive.ytn.co.kr/...", "gain_db": 0 }
   ]
 }
 ```
@@ -153,6 +154,27 @@ sudo radio-gen.py --del 4                                 # 빼고 반영까지
 | `on_demand` | `true` 면 듣는 사람이 있을 때만 받습니다 |
 | `linger_sec` | 마지막 사람이 끊고도 더 받아 두는 초 |
 
+### 기본으로 들어 있는 채널
+
+설치하면 아래 다섯 개가 들어 있습니다. 2026-08 기준으로 주소가 열리는 것을
+확인한 값입니다.
+
+| 키 | 방송 | 성격 |
+|---|---|---|
+| 1 | YTN 라디오 | 뉴스 |
+| 2 | TBS FM 95.1 | 서울, 음악·시사 |
+| 3 | EBS FM 104.5 | 교육·음악 |
+| 4 | AFN 한국 (The Eagle) | 영어 팝·록 |
+| 5 | 아리랑 라디오 | 영어 |
+
+바꿔 볼 만한 것 몇 가지:
+
+- **TBS eFM 101.3** (영어) — `https://cdnefm.tbs.seoul.kr/tbs/_definst_/tbs_efm_web_360.smil/chunklist.m3u8`
+- **CBS 음악FM** — `https://m-aac.cbs.co.kr/mweb_cbs939/_definst_/cbs939.stream/playlist.m3u8`
+- **국악방송** — `http://mgugaklive.nowcdn.co.kr/gugakradio/gugakradio.stream/playlist.m3u8`
+- **국방FM** — `https://mediaworks.dema.mil.kr/live_edge/audio.sdp/playlist.m3u8`
+- AFN 이 AAC 로 안 붙으면 MP3 판이 있습니다 — 주소 끝을 `AFNP_OSN.mp3` 로
+
 ### 주소를 모를 때
 
 ```bash
@@ -163,9 +185,24 @@ sudo radio-gen.py --find classical
 radio-browser.info 에서 찾아 **그대로 실행할 `--add` 명령**까지 만들어 줍니다.
 
 **국내 지상파(KBS·MBC·SBS)는 이 방법으로 안 됩니다.** 재생할 때마다 서명과
-토큰이 붙는 주소라 고정 URL 이 없고, 있어도 몇 시간 뒤 만료됩니다. 방송사
-앱·웹에서 쓰라고 만든 것이라 그렇습니다. 고정 주소를 내주는 인터넷 전용
-방송국(지역 방송, 해외 방송, SomaFM 등)은 그대로 됩니다.
+토큰이 붙는 주소라 고정 URL 이 없습니다. 토큰만 떼고 원본을 열어 보면
+이렇습니다.
+
+```
+KBS 쿨FM    https://2fm-ad.gscdn.kbs.co.kr/2fm_ad_192_1.m3u8    → 403 Forbidden
+SBS 파워FM  https://radiolive.sbs.co.kr/powerpc/powerfm.stream/  → 403 Forbidden
+MBC FM4U    https://minimw.imbc.com/dmfm/_definst_/mfm.stream/   → 400 Bad Request
+```
+
+KBS 는 CloudFront 서명(`Policy=`), SBS 는 JWT(`token=`), MBC 는 세션
+파라미터(`_lsu_sa_=`)를 붙입니다. 전부 시간이 지나면 만료돼서 설정 파일에
+박아 둘 수가 없습니다.
+
+굳이 넣으려면 토큰을 대신 받아 주는 중계를 쓰는 수밖에 없습니다
+([BSofDeath/radio.bsod.kr](https://github.com/BSofDeath/radio.bsod.kr) 이
+Cloudflare Workers 로 그런 걸 돌립니다). 다만 **남이 개인적으로 돌리는
+서비스**라 내려가면 그날로 안 나오고, 라이선스나 이용약관이 적혀 있지
+않습니다. 집에서 혼자 듣는 정도를 넘어선다면 권하지 않습니다.
 
 ---
 
@@ -196,11 +233,11 @@ sudo radio-gen.py --status
 
   번호  채널            상태      듣는중   마지막 변화   비고
   ────────────────────────────────────────────────────────────────────
-  1번   그루브살롱      받는중    2명      1초 전
-  2번   드론존          쉬는중    0명      12분 전
-  3번   부트리커        안나옴    0명      2분 전        rc=1 연속실패 4
+  1번   YTN라디오       받는중    2명      1초 전
+  2번   TBS FM          쉬는중    0명      12분 전
+  3번   EBS FM          안나옴    0명      2분 전        rc=1 연속실패 4
 
-  껍데기 3/3개 떠 있음, ffmpeg 1개 돌고 있음
+  껍데기 5/5개 떠 있음, ffmpeg 1개 돌고 있음
 ```
 
 **껍데기는 채널 수만큼 항상 떠 있고, ffmpeg 는 듣는 사람이 있을 때만 돕니다.**
