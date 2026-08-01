@@ -40,6 +40,15 @@ done
 command -v ffmpeg >/dev/null && ok "ffmpeg $(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f3)" \
                              || bad "ffmpeg 가 없습니다 (apt install ffmpeg)"
 
+# 로그가 무한정 안 쌓이는지
+if [[ -f /etc/logrotate.d/omni-radio ]]; then
+  ok "로그 정리 설정 있음 (14일 뒤 자동 삭제)"
+else
+  bad "/etc/logrotate.d/omni-radio 가 없습니다 - 로그가 계속 쌓입니다"
+fi
+NBAK=$(ls -1 /etc/asterisk/*.bak-* /etc/asterisk/radio-stations.json.bak-* 2>/dev/null | wc -l)
+(( NBAK > 30 )) && note "설정 백업이 ${NBAK}개 있습니다 (14일 지난 것은 반영할 때 치웁니다)"
+
 # 로그 파일 주인. root 로 만들어져 있으면 통화 중 AGI 가 조용히 아무것도 못 씁니다.
 for L in /var/log/asterisk/radio.log /var/log/asterisk/radio-stream.log; do
   if [[ -e "$L" ]]; then

@@ -1,12 +1,23 @@
-# 라디오 로그가 무한정 커지지 않게. /etc/logrotate.d/omni-radio 로 설치됩니다.
+# 라디오 로그가 무한정 쌓이지 않게. /etc/logrotate.d/omni-radio 로 설치됩니다.
 #
 # radio.log         누가 언제 어느 채널을 들었나 (한 통화에 몇 줄)
-# radio-stream.log  스트림이 끊기고 다시 붙은 기록. 방송국이 불안정하면
+# radio-stream.log  스트림이 켜지고 꺼지고 다시 붙은 기록. 방송국이 불안정하면
 #                   여기가 빨리 자랍니다. 그래서 daily 로 둡니다.
+#
+# 주석은 반드시 줄 맨 앞에 둡니다. logrotate 는 줄 중간의 # 를 주석으로 안 볼
+# 수 있고, 설정이 깨지면 이 파일뿐 아니라 그날 정리 자체가 멈춥니다.
+#
+#   daily     하루에 한 번 돌립니다
+#   maxsize   그 전이라도 20M 이 넘으면 돌립니다
+#   rotate    묵은 것을 14개까지 둡니다
+#   maxage    14일이 지나면 개수와 상관없이 지웁니다
+#   dateext   파일 이름에 날짜를 붙여 언제 것인지 바로 보이게
 /var/log/asterisk/radio.log /var/log/asterisk/radio-stream.log {
     daily
-    rotate 14
     maxsize 20M
+    rotate 14
+    maxage 14
+    dateext
     missingok
     notifempty
     compress

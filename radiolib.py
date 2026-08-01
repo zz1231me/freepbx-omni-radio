@@ -348,6 +348,32 @@ def ensure_include() -> str | None:
     return "추가함"
 
 
+def prune_backups(target: Path, keep_days: int = 14, keep_min: int = 3) -> int:
+    """<이름>.bak-<날짜> 로 쌓이는 백업을 정리합니다.
+
+    설정을 저장할 때마다 반영이 돌고, 반영마다 백업이 하나 생깁니다. 채널을
+    몇 번 만지작거리면 금세 수십 개가 되는데 아무도 안 치웁니다.
+
+    오래된 것(기본 14일)은 지우되 **가장 최근 몇 개는 날짜와 상관없이
+    남깁니다.** 되돌릴 데가 하나도 없으면 백업을 두는 뜻이 없습니다.
+    """
+    try:
+        baks = sorted(target.parent.glob(target.name + ".bak-*"),
+                      key=lambda f: f.stat().st_mtime, reverse=True)
+    except OSError:
+        return 0
+    cutoff = time.time() - keep_days * 86400
+    gone = 0
+    for f in baks[keep_min:]:
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+                gone += 1
+        except OSError:
+            pass
+    return gone
+
+
 def as_asterisk(p: Path) -> None:
     """asterisk 사용자가 쓸 수 있게. root 로 만든 파일을 그대로 두면
     통화 중에 도는 AGI(=asterisk)가 그 뒤로 조용히 아무것도 못 씁니다."""

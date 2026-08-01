@@ -147,6 +147,11 @@ touch "$CUSTOM"
 BK="${CUSTOM}.bak-$(date +%Y%m%d-%H%M%S)"
 cp -a "$CUSTOM" "$BK"
 echo "  백업: $BK"
+# 14일 넘은 옛 백업은 치웁니다. 안 그러면 다시 깔 때마다 하나씩 쌓입니다.
+# 최근 3개는 날짜와 상관없이 남깁니다 (되돌릴 데는 있어야 합니다).
+ls -1t "${CUSTOM}".bak-* 2>/dev/null | tail -n +4 | while read -r f; do
+  [[ -n "$(find "$f" -mtime +14 2>/dev/null)" ]] && rm -f "$f"
+done
 
 # 표시 구간만 갈아끼웁니다. 같은 파일에 알람(WAKEUP-KOREAN)이 들어 있어도
 # 그쪽은 건드리지 않습니다. #include / #exec 도 구간 밖이면 그대로 둡니다.

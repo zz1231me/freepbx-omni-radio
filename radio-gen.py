@@ -184,6 +184,7 @@ def rewrite(change) -> int:
 
     shutil.copy2(R.STATIONS, R.STATIONS.with_name(
         R.STATIONS.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S")))
+    R.prune_backups(R.STATIONS)
     tmp.replace(R.STATIONS)
     R.as_asterisk(R.STATIONS)
     return 0
@@ -466,7 +467,8 @@ def main() -> int:
         bak = R.MOH_CUSTOM.with_name(
             R.MOH_CUSTOM.name + ".bak-" + time.strftime("%Y%m%d-%H%M%S"))
         shutil.copy2(R.MOH_CUSTOM, bak)
-        print(f"  백업: {bak}")
+        gone = R.prune_backups(R.MOH_CUSTOM)
+        print(f"  백업: {bak}" + (f"  (오래된 것 {gone}개 치움)" if gone else ""))
     R.MOH_CUSTOM.write_text(R.splice(old, block), encoding="utf-8")
     R.as_asterisk(R.MOH_CUSTOM)
     print(f"  {R.MOH_CUSTOM} 에 채널 {len(stations)}개를 썼습니다")
