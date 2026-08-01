@@ -102,7 +102,11 @@ FILTERS=()
 if [[ "$AUDIO" == "soft" || "$AUDIO" == "clear" ]]; then
   # 전화가 못 내는 낮은 소리를 걷어냅니다. 그만큼 나머지에 여유가 생깁니다.
   FILTERS+=("highpass=f=80")
-  [[ "$AUDIO" == "clear" ]] && FILTERS+=("dynaudnorm=f=400:g=15:p=0.9")
+  if [[ "$AUDIO" == "clear" ]]; then
+    # 음량 고르기 + 말이 또렷하게 들리도록 중고음(2.2kHz)을 조금.
+    # 전화는 대역이 좁아서 이 근처를 살짝 올리면 알아듣기가 확 편해집니다.
+    FILTERS+=("dynaudnorm=f=400:g=15:p=0.9" "equalizer=f=2200:t=q:w=1.2:g=3")
+  fi
   if ffmpeg -hide_banner -v error -f lavfi -i anullsrc=r=44100 \
        -af "aresample=resampler=soxr:osr=${RATE}" -t 0.05 -f null - 2>/dev/null; then
     FILTERS+=("aresample=resampler=soxr:osr=${RATE}")

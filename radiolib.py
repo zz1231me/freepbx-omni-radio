@@ -44,12 +44,16 @@ END = ";;; ===== OMNI-RADIO END ====="
 DISP_WIDTH = int(os.getenv("RADIO_DISP_WIDTH", "28"))
 DEFAULT_NUMBER = "7200"
 DEFAULT_IDLE = 7200
-DEFAULT_LINGER = 60
+DEFAULT_LINGER = 0
 DEFAULT_MAX = 10800      # 3시간
+DEFAULT_WAIT_MS = 1000   # 누르고 1초 쉬었다 소리
 # 소리 보정. 전화는 대역이 좁아서(G.722 기준 50~7000Hz) 손댈 여지가 있습니다.
 #   off    아무것도 안 함
-#   soft   낮은 잡음을 걷어내고 리샘플링을 좋은 것으로 (권장. 부작용이 없습니다)
-#   clear  거기에 음량 고르기까지. 작은 소리가 잘 들리는 대신 조용한 구간이 떠오릅니다
+#   soft   낮은 잡음을 걷어내고 리샘플링을 좋은 것으로.
+#          귀로 티가 나라고 만든 게 아니라 '손해 안 보게' 하는 쪽입니다.
+#          차이가 안 느껴지는 게 정상입니다.
+#   clear  귀에 들리게 바꿉니다. 음량을 고르게 하고 말이 또렷하게 들리도록
+#          중고음을 조금 올립니다. 대신 조용한 구간의 잡음도 같이 떠오릅니다.
 AUDIO_PRESETS = ("off", "soft", "clear")
 
 KEYS = "123456789"          # 0 과 * 는 목록, # 는 종료라 채널로 못 씁니다
@@ -99,6 +103,9 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
         # 수화기가 눌린 채로 있으면 통화가 하루 종일 살아 있게 됩니다.
         "max_sec": num("max_sec", DEFAULT_MAX, 300, 86400),
         "audio": str(data.get("audio", "soft")).strip().lower(),
+        # 번호를 누르고 소리가 나기까지 쉬는 시간. 곧바로 나면 놀랍니다.
+        # 찬 채널이 방송에 붙는 시간도 이 사이에 묻힙니다.
+        "start_wait_ms": num("start_wait_ms", DEFAULT_WAIT_MS, 0, 5000),
         "on_demand": data.get("on_demand", True) is not False,
     }
     # 청취자 표시가 이보다 오래되면 죽은 통화로 봅니다. 통화는 idle_sec 이면
