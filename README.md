@@ -149,7 +149,7 @@ sudo radio-gen.py --del 6
   "on_demand": true,
   "linger_sec": 0,
   "max_sec": 10800,
-  "audio": "clear",
+  "audio": "soft",
   "gain_db": 0,
   "start_wait_ms": 1000,
   "stations": [
@@ -171,7 +171,7 @@ sudo radio-gen.py --del 6
 | `on_demand` | `true` 면 듣는 사람이 있을 때만 받습니다 |
 | `linger_sec` | 마지막 사람이 끊고도 더 받아 두는 초 (기본 0 = 듣는 것만 받음) |
 | `max_sec` | 아무리 오래 들어도 끊는 초 (기본 10800 = 3시간) |
-| `audio` | 소리 보정. `clear`(기본, 귀에 들림) / `soft`(티 안 남) / `off` |
+| `audio` | 소리 보정. `soft`(기본) / `clear`(음량 고르게, 잡음도 같이) / `off` |
 | `start_wait_ms` | 번호를 누르고 소리가 나기까지 쉬는 시간 (기본 1000 = 1초) |
 
 ### 기본으로 들어 있는 채널
@@ -224,20 +224,22 @@ ulaw 로 나가면 Asterisk 가 한 번 더 줄이느라 품질도 손해, CPU �
 | 값 | 하는 일 |
 |---|---|
 | `off` | 아무것도 안 함 |
-| `soft` | 낮은 소리를 걷어내고(`highpass=80`) 44.1kHz→16kHz 줄이기를 **soxr** 로 합니다 |
-| **`clear`** (기본) | 말이 또렷해지는 중고음 보강(2.2kHz +3dB) 뒤에 음량 고르기(`dynaudnorm`) |
+| **`soft`** (기본) | 낮은 소리를 걷어내고(`highpass=80`) 44.1kHz→16kHz 줄이기를 **soxr** 로 합니다 |
+| `clear` | 말이 또렷해지는 중고음 보강(2.2kHz +3dB) 뒤에 음량 고르기(`dynaudnorm`) |
 
 **`soft` 는 귀로 티가 나는 설정이 아닙니다.** 7kHz 까지밖에 안 들리는 전화
 대역에서, 원본이 AAC 64~128kbps 면 soxr 과 기본 리샘플러의 차이는 거의
 구분이 안 됩니다. "좋아지게" 가 아니라 "손해 안 보게" 하는 쪽입니다.
 
-그래서 **기본은 `clear`** 입니다. 음량이 고르게 되고 말이 또렷해져서 전화로
-들을 때 실질적인 차이가 납니다. 다만 음량을 끌어올리는 만큼 **조용한 구간의
-잡음도 같이 떠오릅니다.** 음악 방송에서 그게 거슬리면 `soft` 로 내리세요.
+**그래도 기본은 `soft` 입니다.** 한동안 `clear` 를 기본으로 뒀다가 되돌렸습니다.
+실제로 들어 보면 음량을 끌어올리는 만큼 **조용한 구간의 잡음까지 같이
+떠오릅니다.** 곡과 곡 사이, 말과 말 사이의 히스가 도드라져서 방송에 따라
+꽤 거슬립니다. 티는 안 나도 조용한 쪽이 낫다는 결론입니다.
 
-**너무 크게 들리면 맨 위 `gain_db` 를 `-3` 쯤 내리세요.** `dynaudnorm` 은
-조용한 부분을 끌어올리는 게 일이라 원래 커집니다. 여기서는 목표 크기를 75%,
-끌어올리는 상한을 4배로 묶어 뒀지만(그냥 두면 10배까지 갑니다) 그래도
+`clear` 가 맞는 경우도 있습니다 — 원본 음량이 들쭉날쭉하거나 말 위주 방송을
+시끄러운 데서 들을 때입니다. 그때는 바꿔 보시고, **너무 크게 들리면 맨 위
+`gain_db` 를 `-3` 쯤** 같이 내리세요. `dynaudnorm` 은 목표 크기 75%,
+끌어올리는 상한 4배로 묶어 뒀지만(그냥 두면 10배까지 갑니다) 그래도
 원본보다는 큽니다.
 
 #### 왜 `loudnorm` (EBU R128) 을 안 쓰나
@@ -329,9 +331,9 @@ sudo radio-gen.py --find 교통방송
 ### 소리 조절 (저장 즉시 반영)
 
 ```bash
-sudo sed -i 's/"audio": "clear"/"audio": "soft"/' /etc/asterisk/radio-stations.json
+sudo sed -i 's/"audio": "soft"/"audio": "clear"/' /etc/asterisk/radio-stations.json
 ```
-보정을 약하게. 되돌릴 땐 `soft` 와 `clear` 를 바꿔서.
+음량 고르기를 켭니다. 되돌릴 땐 `clear` 와 `soft` 를 바꿔서.
 
 ```bash
 sudo sed -i 's/"gain_db": 0/"gain_db": -3/' /etc/asterisk/radio-stations.json
