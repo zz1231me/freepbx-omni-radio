@@ -196,7 +196,8 @@ cat <<'EOF'
  사용
    그 번호를 걸면 (콜백이 와서) 화면에 채널 목록이 뜹니다.
 
-     "채널을 고르세요"  →  [1]그루브살롱 [2]드론존  →  [3]부트리커
+     "채널을 고르세요"  →  [1]YTN라디오 [2]TBS FM
+                        →  [3]EBS FM [4]AFN한국  →  [5]아리랑라디오
                                   ↓ 번호를 누르면
                               그 채널이 나옵니다
 
@@ -212,11 +213,11 @@ cat <<'EOF'
 
  채널 바꾸기 — 둘 중 편한 쪽으로
    sudo nano /etc/asterisk/radio-stations.json    저장하면 몇 초 뒤 알아서 반영
-   sudo radio-gen.py --add 4 재즈 https://...     명령으로 (확인·반영까지 한 번에)
-   sudo radio-gen.py --del 4
+   sudo radio-gen.py --add 6 국악방송 http://...   명령으로 (확인·반영까지 한 번에)
+   sudo radio-gen.py --del 6
 
  주소를 모를 때 (찾아서 --add 명령까지 만들어 줍니다)
-   sudo radio-gen.py --find 재즈
+   sudo radio-gen.py --find 교통방송
    sudo radio-gen.py --find classical
 
  번호를 바꾸려면

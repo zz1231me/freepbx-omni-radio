@@ -155,11 +155,21 @@ fi
 # 깔린 파일이 소스와 같은지
 if [[ -f "$SRC" && -f "$DEPLOY" ]]; then
   if python3 - "$SRC" "$DEPLOY" <<'PY'
-import re, sys
-src = open(sys.argv[1], encoding='utf-8').read()
+import sys
+# 표시 구간을 '끝 줄까지' 잘라서 소스와 견줍니다.
+#   예전에는 정규식으로 END 까지만 잡았는데, non-greedy 라 END 뒤의 ' ====='
+#   가 빠졌습니다. 소스에는 그게 있으니 설치가 아무리 잘 돼도 늘 달랐습니다.
+#   문자열 위치로 자르면 그런 실수가 안 생깁니다.
+BEGIN, END = ";;; ===== OMNI-RADIO BEGIN", ";;; ===== OMNI-RADIO END"
+src = open(sys.argv[1], encoding='utf-8').read().strip()
 dep = open(sys.argv[2], encoding='utf-8').read()
-m = re.search(r';;; ===== OMNI-RADIO BEGIN.*?;;; ===== OMNI-RADIO END', dep, re.S)
-sys.exit(0 if m and m.group(0).strip() == src.strip() else 1)
+i = dep.find(BEGIN)
+j = dep.find(END, i + 1)
+if i < 0 or j < 0:
+    sys.exit(1)
+eol = dep.find("\n", j)                      # END 가 있는 줄 전체를 포함
+seg = (dep[i:] if eol < 0 else dep[i:eol]).strip()
+sys.exit(0 if seg == src else 1)
 PY
   then ok "$DEPLOY 의 라디오 구간이 소스와 같습니다"
   else bad "$DEPLOY 의 라디오 구간이 소스와 다릅니다 (설치가 중간에 멈췄을 수 있습니다)"
