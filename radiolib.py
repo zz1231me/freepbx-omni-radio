@@ -42,9 +42,10 @@ END = ";;; ===== OMNI-RADIO END ====="
 # 전화기 화면 한 줄에 들어가는 대략의 폭. 한글은 두 칸으로 셉니다.
 # 넘치면 힌트(>[*]목록)를 떼고 채널 이름만 남깁니다.
 DISP_WIDTH = int(os.getenv("RADIO_DISP_WIDTH", "28"))
+DEFAULT_NUMBER = "7200"
 DEFAULT_IDLE = 7200
 DEFAULT_LINGER = 300
-KEYS = "123456789"          # 0 은 음량, * 는 목록, # 는 종료라 채널로 못 씁니다
+KEYS = "123456789"          # 0 과 * 는 목록, # 는 종료라 채널로 못 씁니다
 
 
 class BadConfig(Exception):
@@ -78,7 +79,7 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
     if rate not in (8000, 16000):
         raise BadConfig(f"rate 는 8000 또는 16000 입니다: {data.get('rate')!r}")
 
-    number = str(data.get("number", "7100")).strip()
+    number = str(data.get("number", DEFAULT_NUMBER)).strip()
     if not re.match(r"^\*?\d{2,6}$", number):
         raise BadConfig(f"number 는 2~6자리 숫자입니다 (* 로 시작해도 됩니다): {number!r}")
 
@@ -272,7 +273,7 @@ def render(stations: list[dict], cfg: dict) -> str:
              "; digit= 을 넣지 마세요. MOH 자체에도 '이 숫자를 누르면 저 클래스로'",
              "; 라는 기능이 있지만, 그걸 켜면 MOH 가 숫자를 먼저 먹어서 다이얼플랜의",
              "; WaitExten 이 못 받습니다. 그러면 채널은 바뀌는데 화면도 안 바뀌고",
-             "; 목록·음량·종료가 전부 안 먹습니다. 전환은 다이얼플랜이 합니다.",
+             "; 목록·종료가 전부 안 먹습니다. 전환은 다이얼플랜이 합니다.",
              ";",
              f"; 모드 {mode}"
              + ("  — 듣는 사람이 있을 때만 받습니다 "

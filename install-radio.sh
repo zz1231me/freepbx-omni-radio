@@ -3,7 +3,7 @@
 # 인터넷 라디오를 내선 하나에 붙입니다. FreePBX 에서 한 번만 실행하세요.
 #
 #   sudo ./install-radio.sh                    설치 / 다시 설치
-#   sudo ./install-radio.sh --number 7150      다른 번호로 (기본 7100)
+#   sudo ./install-radio.sh --number 7250      다른 번호로 (기본 7200)
 #   sudo ./install-radio.sh --no-check         스트림 확인은 건너뛰기 (빠름)
 #   sudo ./install-radio.sh --rate 8000        G.711 만 쓰는 환경이면
 #
@@ -36,6 +36,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ -z "$RATE"   || "$RATE"   =~ ^(8000|16000)$ ]] || { echo "[X] --rate 는 8000 또는 16000 입니다"; exit 1; }
+[[ -z "$NUMBER" || "$NUMBER" =~ ^\*?[0-9]{2,6}$ ]] || { echo "[X] --number 는 2~6자리 숫자입니다"; exit 1; }
+
 log()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m[!] %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m[X] %s\033[0m\n' "$*" >&2; exit 1; }
@@ -62,7 +65,7 @@ echo "  ffmpeg $(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f3)"
 # 통화 중에 도는 AGI(=asterisk)와 스트림 껍데기가 둘 다 여기에 씁니다.
 mkdir -p "$LIBDIR" /var/lib/asterisk/radio/live /var/lib/asterisk/radio/status
 chown -R asterisk:asterisk /var/lib/asterisk/radio
-chmod -R 0775 /var/lib/asterisk/radio
+find /var/lib/asterisk/radio -type d -exec chmod 0775 {} +
 
 # 로그 파일을 미리 asterisk 소유로 만들어 둡니다.
 # root 로 먼저 만들어지면 통화 중에 도는 AGI(=asterisk)와 스트림이 그 뒤로
@@ -112,6 +115,19 @@ AGIDIR="$(asterisk -rx 'core show settings' 2>/dev/null \
 AGIDIR="${AGIDIR:-/var/lib/asterisk/agi-bin}"
 mkdir -p "$AGIDIR"
 
+# 문법이 깨진 채로 깔리면 통화가 그냥 조용히 끊깁니다. 그래서 깔기 '전' 에 봅니다.
+# (깔고 나서 보면 이미 깨진 게 자리를 차지한 뒤라 막는 게 아니라 알리는 것뿐입니다)
+for f in radiolib.py radio.agi radio-gen.py replace-blocks.py; do
+  python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$HERE/$f" \
+    || die "$f 문법 오류 - 깔지 않았습니다"
+done
+for f in radio-stream.sh verify.sh; do
+  bash -n "$HERE/$f" || die "$f 문법 오류 - 깔지 않았습니다"
+done
+python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$HERE/stations.json" \
+  || die "stations.json 문법 오류 - 깔지 않았습니다"
+echo "  문법 확인 OK"
+
 install -m 0644 "$HERE/radiolib.py"     "$LIBDIR/radiolib.py"
 install -m 0755 "$HERE/radio.agi"       "$AGIDIR/radio.agi"
 chown asterisk:asterisk "$AGIDIR/radio.agi"
@@ -120,26 +136,11 @@ install -m 0755 "$HERE/radio-gen.py"    /usr/local/bin/radio-gen.py
 install -m 0755 "$HERE/verify.sh"       /usr/local/bin/radio-verify.sh
 install -m 0755 "$HERE/replace-blocks.py" /usr/local/bin/radio-replace-blocks.py
 
-# 채널 목록을 저장하면 알아서 반영되게. 이게 있어서 "고치고 명령 하나 더" 가
-# 아니라 "고치면 끝" 이 됩니다. 저장한 JSON 이 깨져 있으면 아무것도 안 바꾸고
-# 실패하므로, 편집하다 실수해도 듣던 라디오가 안 죽습니다.
-install -m 0644 "$HERE/radio-watch.path"    /etc/systemd/system/
-install -m 0644 "$HERE/radio-watch.service" /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable --now radio-watch.path >/dev/null 2>&1 \
-  && echo "  radio-watch.path 등록 (채널 목록을 저장하면 자동 반영)" \
-  || warn "자동 반영 등록 실패 - 고친 뒤 sudo radio-gen.py --apply 를 직접 하세요"
-
-# 문법이 깨진 채로 깔리면 통화가 그냥 조용히 끊깁니다. 여기서 막습니다.
-for f in "$LIBDIR/radiolib.py" "$AGIDIR/radio.agi" /usr/local/bin/radio-gen.py; do
-  python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$f" \
-    || die "$f 문법 오류"
-done
-bash -n /usr/local/bin/radio-stream.sh || die "radio-stream.sh 문법 오류"
 echo "  $AGIDIR/radio.agi"
 echo "  $LIBDIR/radiolib.py"
 echo "  /usr/local/bin/{radio-stream.sh,radio-gen.py,radio-verify.sh}"
 
+#------------------------------------------------------------------------------
 log "4/5  다이얼플랜 교체"
 #------------------------------------------------------------------------------
 touch "$CUSTOM"
@@ -153,7 +154,8 @@ python3 /usr/local/bin/radio-replace-blocks.py \
   "$CUSTOM" "$HERE/extensions_custom-radio.conf" || die "다이얼플랜 교체 실패"
 chown asterisk:asterisk "$CUSTOM"
 
-fwconsole reload >/dev/null 2>&1 || fwconsole reload
+fwconsole reload >/dev/null 2>&1 || fwconsole reload \
+  || die "fwconsole reload 실패 - 위 메시지를 보세요"
 
 #------------------------------------------------------------------------------
 log "5/5  채널을 MOH 클래스로 펼치고 번호 붙이기"
@@ -165,6 +167,16 @@ if (( DO_CHECK )); then
   /usr/local/bin/radio-gen.py --check || warn "안 나오는 채널이 있습니다. 주소를 확인하세요"
 fi
 /usr/local/bin/radio-gen.py --apply || die "반영 실패 (위 메시지를 보세요)"
+
+# 다 되고 나서 자동 반영을 켭니다.
+#   먼저 켜 두면 설치 중간에 채널 목록이 건드려질 때 아직 다이얼플랜이 안 올라온
+#   상태로 반영이 돌아 애먼 실패가 로그에 남습니다. 순서만 뒤로 미루면 됩니다.
+install -m 0644 "$HERE/radio-watch.path"    /etc/systemd/system/
+install -m 0644 "$HERE/radio-watch.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now radio-watch.path >/dev/null 2>&1 \
+  && echo "  자동 반영 켬 - 이제 채널 목록을 저장하면 알아서 반영됩니다" \
+  || warn "자동 반영 등록 실패 - 고친 뒤 sudo radio-gen.py --apply 를 직접 하세요"
 
 #------------------------------------------------------------------------------
 #------------------------------------------------------------------------------

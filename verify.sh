@@ -175,9 +175,9 @@ log "6. 번호가 붙어 있는가"
 NUM="$(python3 - "$STATIONS" <<'PYNUM'
 import json, sys
 try:
-    print(json.load(open(sys.argv[1], encoding='utf-8')).get('number', '7100'))
+    print(json.load(open(sys.argv[1], encoding='utf-8')).get('number', '7200'))
 except Exception:
-    print('7100')
+    print('7200')
 PYNUM
 )"
 LIVE_NUM="$(asterisk -rx "dialplan show ${NUM}@from-internal" 2>/dev/null \
@@ -215,7 +215,7 @@ grep -q 'omni-radio-number' "$DEPLOY" 2>/dev/null \
 
 echo
 if (( FAIL == 0 )); then
-  printf '\033[1;32m모두 정상입니다.\033[0m  7100 을 걸어 보세요.\n\n'
+  printf '\033[1;32m모두 정상입니다.\033[0m  %s 을 걸어 보세요.\n\n' "$NUM"
 else
   printf '\033[1;31m[문제] %d 건\033[0m  위의 빨간 줄을 보세요.\n\n' "$FAIL"
 fi

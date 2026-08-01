@@ -87,7 +87,7 @@ def main() -> int:
     print(f"  넣은 컨텍스트 {len(added)}개: {', '.join(added)}")
 
     # 다른 파일에 남아 있는 옛 진입점을 알려 줍니다 (지우지는 않습니다).
-    # 여기가 겹치면 7100 이 엉뚱한 곳으로 갑니다.
+    # 여기가 겹치면 걸었을 때 엉뚱한 곳으로 갑니다.
     stale = []
     for other in conf.parent.glob("extensions*.conf"):
         if other == conf:
