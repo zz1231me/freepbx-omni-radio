@@ -207,14 +207,45 @@ sudo asterisk -rx 'core show channels verbose'
 |---|---|---|
 | `ulaw` / `alaw` (G.711) | **8000** | ~3.4kHz |
 | `g722` | **16000** | ~7kHz |
+| `opus` | **48000** | ~20kHz |
+
+**44.1kHz 로는 못 합니다.** 그 속도로 주고받는 전화 코덱이 없습니다. 넣어
+봐야 Asterisk 가 코덱에 맞춰 도로 줄이기만 합니다.
 
 안 맞아도 소리는 나옵니다 — Asterisk 가 알아서 줄이거나 늘립니다. 다만 그
 변환을 **ffmpeg 의 soxr 이 하는 편이 낫습니다.** 16000 으로 만들어 놓고
 ulaw 로 나가면 Asterisk 가 한 번 더 줄이느라 품질도 손해, CPU 도 손해입니다.
 
-`g722` 가 붙는다면 그대로 두세요. 대역이 두 배라 **코덱을 바꾸는 게 어떤
-보정보다 큰 차이**입니다. 요즘 SIP 전화기는 대부분 지원하니, ulaw 로 붙고
-있다면 FreePBX 의 SIP Settings 와 내선 설정에서 g722 를 켜 볼 만합니다.
+**코덱을 바꾸는 게 어떤 보정보다 큰 차이입니다.** ulaw 로 붙고 있다면
+FreePBX 의 SIP Settings 와 내선 설정에서 g722 를 켜 보세요. 대역이 두 배가
+됩니다.
+
+### 더 올리려면 — Opus
+
+G.722 는 7kHz 에서 잘라냅니다. 방송 원본(AAC 64~128kbps)에는 그 위로도
+소리가 들어 있으니, Opus 로 붙으면 그만큼 더 들립니다. 음악 방송이면
+체감될 만합니다.
+
+```bash
+sudo asterisk -rx 'module show like opus'
+```
+
+`codec_opus.so` 가 보이면 쓸 수 있습니다. FreePBX 의 **Settings → Asterisk
+SIP Settings** 와 **내선 → Advanced** 에서 opus 를 켜고, 통화 중에 실제로
+붙었는지 확인합니다.
+
+```bash
+sudo asterisk -rx "core show channel $(sudo asterisk -rx 'core show channels concise' | grep '^PJSIP/' | head -1 | cut -d'!' -f1)" | grep -i nativeformats
+```
+
+`(opus)` 로 나오면 그때 `rate` 를 48000 으로 올리세요.
+
+```bash
+sudo sed -i 's/"rate": 16000/"rate": 48000/' /etc/asterisk/radio-stations.json
+```
+
+**전화기가 지원해야 하고, 안 되면 그냥 g722 로 협상됩니다** — 켜 봐서
+손해 볼 건 없습니다. 다만 CPU 는 g722 보다 더 씁니다.
 
 ### 소리 보정
 

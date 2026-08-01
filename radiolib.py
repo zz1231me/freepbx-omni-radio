@@ -58,6 +58,15 @@ DEFAULT_AUDIO = "soft"
 #          방송에 따라 거슬립니다. 그래서 기본으로 두지 않습니다.
 AUDIO_PRESETS = ("off", "soft", "clear")
 
+# 샘플레이트 -> Asterisk 형식 이름.
+#   전화기와 실제로 붙는 코덱에 맞춰야 합니다. 안 맞으면 Asterisk 가 한 번 더
+#   변환하는데, 그 변환은 ffmpeg 의 soxr 보다 못합니다.
+#     8000  ulaw / alaw (G.711)     16000 g722       48000 opus
+#   44100 은 쓸 일이 없습니다. 그 속도로 주고받는 전화 코덱이 없어서,
+#   넣어 봐야 Asterisk 가 도로 줄입니다.
+SLIN = {8000: "slin", 12000: "slin12", 16000: "slin16", 24000: "slin24",
+        32000: "slin32", 44100: "slin44", 48000: "slin48"}
+
 KEYS = "123456789"          # 0 과 * 는 목록, # 는 종료라 채널로 못 씁니다
 
 
@@ -91,11 +100,13 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
     # rate 는 전화기와 실제로 붙는 코덱에 맞춰야 합니다.
     #   ulaw / alaw (G.711)  -> 8000
     #   g722                 -> 16000
+    #   opus                 -> 48000
     # 안 맞으면 Asterisk 가 한 번 더 줄이거나 늘립니다. 소리가 안 나오진
     # 않지만, 그 변환을 ffmpeg 의 soxr 이 하는 것보다 못합니다.
     rate = int(data.get("rate", 16000)) if str(data.get("rate", 16000)).isdigit() else 0
-    if rate not in (8000, 16000):
-        raise BadConfig(f"rate 는 8000(ulaw/alaw) 또는 16000(g722) 입니다: {data.get('rate')!r}")
+    if rate not in SLIN:
+        raise BadConfig("rate 는 " + " / ".join(f"{r}({n})" for r, n in SLIN.items())
+                        + f" 중 하나입니다: {data.get('rate')!r}")
 
     number = str(data.get("number", DEFAULT_NUMBER)).strip()
     if not re.match(r"^\*?\d{2,6}$", number):
@@ -290,7 +301,7 @@ def ensure_number(num: str) -> str:
 
 
 def render(stations: list[dict], cfg: dict) -> str:
-    fmt = "slin16" if cfg["rate"] == 16000 else "slin"
+    fmt = SLIN[cfg["rate"]]
     mode = "ondemand" if cfg["on_demand"] else "always"
     lines = [BEGIN,
              ";",
@@ -299,7 +310,8 @@ def render(stations: list[dict], cfg: dict) -> str:
              ";   sudo radio-gen.py --apply",
              ";",
              f"; format={fmt} 이 핵심입니다. 빠뜨리면 8kHz 로 해석해서 소리가",
-             "; 느리고 낮게(피치가 반으로) 나옵니다. G.722 통화는 16kHz 입니다.",
+             "; 느리고 낮게(피치가 반으로) 나옵니다. 전화기와 붙는 코덱에 맞춰야",
+             "; Asterisk 가 한 번 더 변환하지 않습니다 (g722=16000, opus=48000).",
              ";",
              "; digit= 을 넣지 마세요. MOH 자체에도 '이 숫자를 누르면 저 클래스로'",
              "; 라는 기능이 있지만, 그걸 켜면 MOH 가 숫자를 먼저 먹어서 다이얼플랜의",
