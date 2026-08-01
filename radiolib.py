@@ -46,7 +46,8 @@ DEFAULT_NUMBER = "7200"
 DEFAULT_IDLE = 7200
 DEFAULT_LINGER = 0
 DEFAULT_MAX = 10800      # 3시간
-DEFAULT_WAIT_MS = 1000   # 누르고 1초 쉬었다 소리
+DEFAULT_WAIT_MS = 2000   # 누르고 2초 쉬었다 소리
+DEFAULT_FADE_MS = 2000   # 그 뒤 2초 동안 절반 크기로
 DEFAULT_AUDIO = "soft"
 # 소리 보정. 전화는 대역이 좁아서(G.722 기준 50~7000Hz) 손댈 여지가 있습니다.
 #   off    아무것도 안 함
@@ -124,6 +125,8 @@ def load(path: Path | None = None) -> tuple[list[dict], dict]:
         # 번호를 누르고 소리가 나기까지 쉬는 시간. 곧바로 나면 놀랍니다.
         # 찬 채널이 방송에 붙는 시간도 이 사이에 묻힙니다.
         "start_wait_ms": num("start_wait_ms", DEFAULT_WAIT_MS, 0, 5000),
+        # 절반 크기로 나오는 시간. 이 뒤에 100% 가 됩니다.
+        "fade_ms": num("fade_ms", DEFAULT_FADE_MS, 0, 5000),
         # 전체 음량. 채널마다 두는 gain_db 와 더해집니다.
         # 보정이 너무 크게 들리면 여기서 -3 쯤 내리는 게 제일 간단합니다.
         "gain_db": num("gain_db", 0, -20, 20),

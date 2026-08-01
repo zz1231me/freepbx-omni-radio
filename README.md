@@ -151,7 +151,8 @@ sudo radio-gen.py --del 6
   "max_sec": 10800,
   "audio": "soft",
   "gain_db": 0,
-  "start_wait_ms": 1000,
+  "start_wait_ms": 2000,
+  "fade_ms": 2000,
   "stations": [
     { "key": "1", "name": "YTN라디오", "url": "https://radiolive.ytn.co.kr/...", "gain_db": 0 }
   ]
@@ -172,7 +173,8 @@ sudo radio-gen.py --del 6
 | `linger_sec` | 마지막 사람이 끊고도 더 받아 두는 초 (기본 0 = 듣는 것만 받음) |
 | `max_sec` | 아무리 오래 들어도 끊는 초 (기본 10800 = 3시간) |
 | `audio` | 소리 보정. `soft`(기본) / `clear`(음량 고르게, 잡음도 같이) / `off` |
-| `start_wait_ms` | 번호를 누르고 소리가 나기까지 쉬는 시간 (기본 1000 = 1초) |
+| `start_wait_ms` | 번호를 누르고 조용한 시간 (기본 2000 = 2초) |
+| `fade_ms` | 절반 크기로 나오는 시간. 이 뒤 100% (기본 2000) |
 
 ### 기본으로 들어 있는 채널
 
