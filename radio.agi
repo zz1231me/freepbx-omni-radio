@@ -134,14 +134,16 @@ def emit(agi: AGI, st: dict, uid: str) -> None:
 
     # 소리가 안 날 것 같으면 그 사실이 힌트보다 급한 정보입니다.
     # 조용한 이유를 모르는 것이 제일 나쁩니다.
-    #   down    방송국에 못 붙고 있음
-    #   stopped 껍데기가 내려감
-    #   ?       상태 파일이 아예 없음 = 껍데기가 한 번도 안 떴음
-    #           (= Asterisk 가 이 클래스를 안 띄웠다는 뜻. radio-gen.py --apply)
+    #   down  방송국에 못 붙고 있음
+    #   ?     상태 파일이 아예 없음 = 껍데기가 한 번도 안 떴음
+    #         (= Asterisk 가 이 클래스를 안 띄웠다는 뜻. radio-gen.py --apply)
+    #
+    # 'stopped' 로는 판단하지 않습니다. moh reload 때 죽는 껍데기가 살아 있는
+    # 쪽 상태를 덮어써서 멀쩡한 채널을 그렇게 보이게 만든 적이 있습니다.
     kind, age, _ = R.status(st["cls"])
     if kind == "down" and 0 <= age < 120:
         note = "(안나옴)"
-    elif kind in ("stopped", "?"):
+    elif kind == "?":
         note = "(준비안됨)"
     else:
         note = ""

@@ -499,6 +499,7 @@ def main() -> int:
                 f.unlink(missing_ok=True)
                 dropped += 1
             d.rmdir()
+            (R.STATUS / d.name).unlink(missing_ok=True)   # 상태 파일도 같이
     except OSError:
         pass
     if dropped:
