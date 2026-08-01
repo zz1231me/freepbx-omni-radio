@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""라디오 AGI — 채널이 무엇인지 아는 곳은 여기 하나뿐입니다.
+
+    AGI(radio.agi,menu,,${UNIQUEID},${RD_WHO})      채널 목록 (화면에 뿌릴 꼴로)
+    AGI(radio.agi,tune,KEY,${UNIQUEID},${RD_WHO})   KEY 번 채널로
+    AGI(radio.agi,callback,,,EXT)                   그 내선으로 되걸기
+    AGI(radio.agi,off,,${UNIQUEID},${RD_WHO})       청취 종료
+
+돌려주는 채널 변수
+    RD_OK        1 성공 / 0 실패   (호출 전에 다이얼플랜이 0 으로 리셋합니다)
+    RD_ERR       실패 종류: config | nosuch | input
+    RD_KEY       고른 채널 번호
+    RD_CLASS     그 채널의 MOH 클래스 이름 (StartMusicOnHold 에 넣습니다)
+    RD_NAME      채널 이름
+    RD_DISPLAY   전화기 화면에 띄울 한 줄
+    RD_PAGES     채널 목록의 화면 수      (menu 에서만)
+    RD_PAGE_1..N 화면마다 보여 줄 한 줄    (menu 에서만)
+    RD_IDLE      듣는 중 무입력으로 끊을 때까지의 초   (menu 에서만)
+    RD_NUM       이 서비스의 번호 (화면에 발신번호로 뜹니다)  (menu 에서만)
+
+통화ID(${UNIQUEID}) 를 받는 이유
+    누가 지금 무엇을 듣고 있는지를 파일 하나로 남기고, 스트림 껍데기가 그걸
+    보고 방송을 켜고 끕니다. 아무도 안 듣는 채널에 대역폭을 쓰지 않으려는
+    것입니다. 통화가 끝나면 h 확장에서 off 로 거둡니다.
+
+다이얼플랜에는 채널 이름도 주소도 없습니다. 여기서 받은 것을 틀기만 합니다.
+채널을 늘리거나 이름을 바꿀 때 다이얼플랜은 건드릴 일이 없습니다.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import sys
+from datetime import datetime
+from pathlib import Path
+
+for _p in (Path(os.getenv("RADIO_LIB", "/usr/local/lib/omni-radio")),
+           Path(__file__).resolve().parent):
+    if (_p / "radiolib.py").is_file():
+        sys.path.insert(0, str(_p))
+        break
+import radiolib as R                                          # noqa: E402
+
+# --- 콜백 -------------------------------------------------------------------
+# 내가 7100 을 거는 '발신' 통화는 통화 중 화면 갱신이 안 되는 기종이 있습니다
+# (내가 발신자라서). 라디오는 화면에 뜨는 채널 이름이 사실상 유일한 화면이라
+# 이게 안 되면 반쪽입니다. 그래서 받고 끊은 뒤 그 내선으로 되걸어 '수신'으로
+# 진행합니다. 전화기가 발신 중에도 화면을 잘 바꿔 준다면 RD_NOCB=1 로 끄세요.
+SPOOL = Path(os.getenv("RADIO_SPOOL", "/var/spool/asterisk/outgoing"))
+STAGING = Path(os.getenv("RADIO_STAGING", "/var/spool/asterisk/tmp"))
+CB_MENU_CTX = os.getenv("RADIO_CB_MENU_CTX", "radio-play")
+CB_DIAL_CTX = os.getenv("RADIO_CB_DIAL_CTX", "radio-cb-dial")
+# 원래 통화가 완전히 끊긴 뒤에 콜백이 들어와야 합니다. 너무 짧으면 끊는 순간과
+# 겹쳐 첫 콜백이 안 받아지고 부재중이 하나 찍힙니다.
+CB_DELAY = int(os.getenv("RADIO_CB_DELAY", "3"))
+CB_NAME = os.getenv("RADIO_CB_NAME", "라디오")
+CB_NUM = os.getenv("RADIO_NUM", "7100")
+
+
+class AGI:
+    """Asterisk 와 주고받는 최소한만. stdout 은 프로토콜 전용입니다."""
+
+    def __init__(self) -> None:
+        self.env: dict[str, str] = {}
+        while True:
+            line = sys.stdin.readline().strip()
+            if not line:
+                break
+            k, _, v = line.partition(":")
+            self.env[k.strip()] = v.strip()
+
+    def cmd(self, text: str) -> str:
+        sys.stdout.write(text + "\n")
+        sys.stdout.flush()
+        return sys.stdin.readline().strip()
+
+    def set_var(self, name: str, value: str) -> None:
+        self.cmd('SET VARIABLE %s "%s"' % (name, str(value).replace('"', "")))
+
+    def verbose(self, msg: str) -> None:
+        self.cmd('VERBOSE "%s" 1' % str(msg).replace('"', "'"))
+
+
+def log(msg: str) -> None:
+    try:
+        R.LOG.parent.mkdir(parents=True, exist_ok=True)
+        new = not R.LOG.exists()
+        with R.LOG.open("a", encoding="utf-8") as f:
+            f.write(f"{datetime.now():%F %T} {msg}\n")
+        if new:
+            os.chmod(R.LOG, 0o664)
+            R.as_asterisk(R.LOG)
+    except OSError:
+        pass
+
+
+def make_callback_file(ext: str) -> Path:
+    """지금 이 내선으로 되거는 call file. CB_DELAY 초 뒤에 발사되도록 mtime 을
+    미래로 잡습니다 (원래 통화가 끊길 시간을 줍니다). 받으면 radio-play,s 로
+    들어가 곧바로 라디오가 나옵니다. 자동응답은 전화기 자체 설정에 맡깁니다."""
+    STAGING.mkdir(parents=True, exist_ok=True)
+    SPOOL.mkdir(parents=True, exist_ok=True)
+    name = f"radio-cb-{ext}-{os.getpid()}.call"
+    tmp = STAGING / name
+    tmp.write_text(
+        f"; 라디오 콜백 -> 내선 {ext}\n"
+        f"Channel: Local/{ext}@{CB_DIAL_CTX}/n\n"
+        f'CallerID: "{CB_NAME}" <{CB_NUM}>\n'
+        # 재시도 없음. CB_DELAY 로 원 통화가 끊긴 뒤에 걸므로 첫 시도가 받아집니다.
+        # 재시도를 두면 실패한 첫 시도가 부재중 00:00:00 으로 남습니다.
+        "MaxRetries: 0\nWaitTime: 30\n"
+        f"Context: {CB_MENU_CTX}\nExtension: s\nPriority: 1\n"
+        # 콜백으로 들어간 통화에서 ${CALLERID(num)} 은 '누가 걸었나'가 아니라
+        # 위 CallerID 줄(=서비스 번호)입니다. 그걸로 마지막 채널을 기억하면
+        # 모든 내선이 한 칸을 같이 쓰게 됩니다. 그래서 내선을 따로 실어 보냅니다.
+        f"Setvar: RD_EXT={ext}\n"
+        "Archive: no\n", encoding="utf-8")
+    when = datetime.now().timestamp() + CB_DELAY
+    os.utime(tmp, (when, when))
+    R.as_asterisk(tmp)
+    dest = SPOOL / name
+    tmp.replace(dest)          # 다 쓴 뒤에 한 번에 옮깁니다. 반쪽 파일을 안 집어갑니다
+    return dest
+
+
+def emit(agi: AGI, st: dict, uid: str) -> None:
+    # 표시를 먼저 남깁니다. 다이얼플랜이 StartMusicOnHold 를 하기 전에
+    # 스트림 껍데기가 방송을 받기 시작하도록 한 박자라도 앞세우는 것입니다.
+    R.mark(st["cls"], uid)
+
+    # 소리가 안 날 것 같으면 그 사실이 힌트보다 급한 정보입니다.
+    # 조용한 이유를 모르는 것이 제일 나쁩니다.
+    #   down    방송국에 못 붙고 있음
+    #   stopped 껍데기가 내려감
+    #   ?       상태 파일이 아예 없음 = 껍데기가 한 번도 안 떴음
+    #           (= Asterisk 가 이 클래스를 안 띄웠다는 뜻. radio-gen.py --apply)
+    kind, age, _ = R.status(st["cls"])
+    if kind == "down" and 0 <= age < 120:
+        note = "(안나옴)"
+    elif kind in ("stopped", "?"):
+        note = "(준비안됨)"
+    else:
+        note = ""
+
+    agi.set_var("RD_KEY", st["key"])
+    agi.set_var("RD_CLASS", st["cls"])
+    agi.set_var("RD_NAME", st["name"])
+    agi.set_var("RD_DISPLAY", R.display(st, note=note))
+    agi.set_var("RD_OK", "1")
+
+
+def main() -> int:
+    agi = AGI()
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    a1 = sys.argv[2].strip() if len(sys.argv) > 2 else ""
+    uid = (sys.argv[3].strip() if len(sys.argv) > 3 else "") \
+        or agi.env.get("agi_uniqueid", "").strip()
+    uid = re.sub(r"[^0-9A-Za-z._-]", "", uid)[:64]     # 파일 이름이 되므로
+    ext = (sys.argv[4].strip() if len(sys.argv) > 4 else "") \
+        or agi.env.get("agi_callerid", "").strip()
+
+    agi.set_var("RD_OK", "0")
+    agi.set_var("RD_ERR", "")
+
+    def fail(kind: str, why: str) -> int:
+        agi.set_var("RD_ERR", kind)
+        agi.verbose(f"radio[{kind}]: {why}")
+        log(f"FAIL ext={ext} mode={mode} a1={a1!r} {kind}: {why}")
+        return 0
+
+    # off 는 채널 목록보다 먼저 처리합니다.
+    #   목록이 깨진 상태에서 통화가 끝나면, 여기서 같이 실패해 '듣는 중' 표시가
+    #   안 지워집니다. 그러면 아무도 안 듣는 방송을 만료(몇 시간)까지 계속
+    #   받습니다. 표시를 거두는 데 채널 목록은 필요하지도 않습니다.
+    if mode == "off":
+        R.unmark(uid)
+        log(f"OFF  ext={ext}")
+        agi.set_var("RD_OK", "1")
+        return 0
+
+    try:
+        stations, cfg = R.load()
+    except R.BadConfig as e:
+        # 여기서 실패하면 다이얼플랜이 화면에 알리고 끊습니다.
+        # 무음으로 몇 분을 붙잡고 있는 것보다 낫습니다.
+        return fail("config", str(e))
+
+    by_key = {s["key"]: s for s in stations}
+
+    if mode == "callback":
+        if not ext.isdigit():
+            return fail("input", f"내선을 알 수 없습니다: {ext!r}")
+        try:
+            p = make_callback_file(ext)
+        except OSError as e:
+            # 실패하면 다이얼플랜이 이 통화에서 그냥 라디오를 틉니다.
+            # 화면만 아쉽고 소리는 나옵니다.
+            return fail("io", f"콜백 call file 실패: {e}")
+        agi.set_var("RD_OK", "1")
+        log(f"CALLBACK ext={ext} file={p.name}")
+        return 0
+
+    if mode == "menu":
+        # 채널 목록은 통화 중에 안 바뀝니다. 한 번만 실어 보내고, 그 뒤로는
+        # 다이얼플랜이 받은 것만 가지고 화면을 넘깁니다. 화면 폭에 맞춰 미리
+        # 묶어 두므로 채널이 셋이어도 두 화면이면 다 보입니다.
+        pg = R.pages(stations)
+        agi.set_var("RD_PAGES", str(len(pg)))
+        for i, line in enumerate(pg, 1):
+            agi.set_var(f"RD_PAGE_{i}", line)
+        agi.set_var("RD_IDLE", str(cfg["idle_sec"]))
+        agi.set_var("RD_NUM", cfg["number"])
+        agi.set_var("RD_OK", "1")
+        log(f"MENU ext={ext} 채널 {len(stations)}개 {len(pg)}화면 rate={cfg['rate']}")
+        return 0
+
+    if mode == "tune":
+        if a1 not in by_key:
+            # 없는 번호를 눌렀을 뿐입니다. 통화는 그대로 두고 화면만 알립니다.
+            return fail("nosuch", f"{a1} 번 채널은 없습니다")
+        st = by_key[a1]
+        emit(agi, st, uid)
+        log(f"TUNE ext={ext} ch={st['key']}({st['name']})")
+        return 0
+
+    return fail("input", f"모르는 모드: {mode!r}")
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except BrokenPipeError:      # 상대가 먼저 끊은 경우
+        sys.exit(0)

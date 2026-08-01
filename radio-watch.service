@@ -1,0 +1,12 @@
+# 위 radio-watch.path 가 부르는 실행 단위.  /etc/systemd/system/radio-watch.service
+#
+# --apply 는 채널 목록을 먼저 검사합니다. 저장한 JSON 이 깨져 있으면 아무것도
+# 바꾸지 않고 실패합니다. 그래서 편집하다 실수해도 듣던 라디오가 안 죽습니다.
+# 실패한 이유는 /var/log/asterisk/radio.log 에 남습니다 (journal 을 안 봐도 되게).
+[Unit]
+Description=omni-radio 채널 목록 반영
+After=asterisk.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/radio-gen.py --apply

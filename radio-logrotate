@@ -1,0 +1,17 @@
+# 라디오 로그가 무한정 커지지 않게. /etc/logrotate.d/omni-radio 로 설치됩니다.
+#
+# radio.log         누가 언제 어느 채널을 들었나 (한 통화에 몇 줄)
+# radio-stream.log  스트림이 끊기고 다시 붙은 기록. 방송국이 불안정하면
+#                   여기가 빨리 자랍니다. 그래서 daily 로 둡니다.
+/var/log/asterisk/radio.log /var/log/asterisk/radio-stream.log {
+    daily
+    rotate 14
+    maxsize 20M
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su asterisk asterisk
+    create 0664 asterisk asterisk
+}

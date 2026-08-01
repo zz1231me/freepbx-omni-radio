@@ -1,0 +1,17 @@
+# 채널 목록을 저장하면 알아서 반영합니다.  /etc/systemd/system/radio-watch.path
+#
+# 이게 있어서 "파일 고치고 명령 하나 더" 가 아니라 "파일 고치면 끝" 이 됩니다.
+# nano 로 저장하든 sftp 로 덮어쓰든 몇 초 안에 라디오에 반영됩니다.
+#
+# 편집기마다 저장 방식이 다릅니다(제자리 쓰기 / 임시파일 후 바꿔치기).
+# 둘 다 잡으려고 Changed 와 Modified 를 같이 겁니다.
+[Unit]
+Description=omni-radio 채널 목록이 바뀌면 반영
+
+[Path]
+PathChanged=/etc/asterisk/radio-stations.json
+PathModified=/etc/asterisk/radio-stations.json
+Unit=radio-watch.service
+
+[Install]
+WantedBy=multi-user.target

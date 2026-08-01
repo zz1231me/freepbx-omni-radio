@@ -1,0 +1,40 @@
+{
+  "_설명": [
+    "여기가 채널 목록의 유일한 원본입니다.  /etc/asterisk/radio-stations.json 으로 깔립니다.",
+    "고친 뒤에는  sudo radio-gen.py --apply  한 줄이면 반영됩니다 (재부팅·Apply Config 불필요).",
+    "key 는 전화기에서 누를 숫자입니다. 1~9 만 됩니다 (0 은 음량, * 는 목록, # 는 종료).",
+    "name 은 전화기 화면에 뜨는 글자입니다. 한글 기준 8자 안쪽이 잘 보입니다.",
+    "아래 URL 은 동작을 확인하기 위한 예시입니다. 반드시 --check 로 확인하고 본인 것으로 바꾸세요.",
+    "국내 지상파(KBS/MBC/SBS)는 재생할 때마다 서명이 붙는 주소라 고정 URL 이 없습니다. README 를 보세요.",
+    "on_demand=true 면 듣는 사람이 있을 때만 방송을 받습니다. 아무도 안 들으면 대역폭이 0 입니다.",
+    "linger_sec 는 마지막 사람이 끊고도 계속 받아 두는 시간입니다. 채널을 돌리다 돌아올 때 안 기다리게 합니다.",
+    "number 는 전화기에서 누를 번호입니다. 바꾸면 --apply 가 다이얼플랜의 그 한 줄을 옮겨 줍니다.",
+    "채널은 손으로 안 고쳐도 됩니다:  sudo radio-gen.py --add 4 재즈 https://...   /   --del 4",
+    "음량은 전화기 자체 볼륨으로 조절하세요. 방송국끼리의 음량 차이만 gain_db 로 맞춥니다 (작으면 3, 크면 -3)."
+  ],
+  "number": "7200",
+  "rate": 16000,
+  "idle_sec": 7200,
+  "on_demand": true,
+  "linger_sec": 300,
+  "stations": [
+    {
+      "key": "1",
+      "name": "그루브살롱",
+      "url": "https://ice1.somafm.com/groovesalad-128-mp3",
+      "gain_db": 0
+    },
+    {
+      "key": "2",
+      "name": "드론존",
+      "url": "https://ice1.somafm.com/dronezone-128-mp3",
+      "gain_db": 0
+    },
+    {
+      "key": "3",
+      "name": "부트리커",
+      "url": "https://ice1.somafm.com/bootliquor-128-mp3",
+      "gain_db": 0
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# 로컬 설정/로그 (혹시라도)
+*.env
+*.log
+*.bak-*
