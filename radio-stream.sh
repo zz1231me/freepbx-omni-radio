@@ -111,12 +111,20 @@ else
   now() { NOW=$(date +%s); }                # 옛 bash 대비
 fi
 
-# 청취자 표시 개수. 없으면 glob 이 안 풀려 원본 문자열이 오므로 -e 로 걸러집니다.
+# 청취자 표시를 셉니다. 없으면 glob 이 안 풀려 원본 문자열이 오므로 -e 로 거릅니다.
+#   N   진짜 청취자 (이 채널을 골라서 듣고 있음)
+#   NW  미리 데우기 (메뉴를 보는 중. 아직 안 골랐음)
+# 둘을 나누는 이유는 여운 때문입니다. 고르지 않은 채널까지 5분을 더 받으면
+# 통화 한 번에 채널 넷이 헛돕니다.
 count_listeners() {
   local f
-  N=0
+  N=0; NW=0
   for f in "$LIVE"/*; do
-    [[ -e "$f" ]] && N=$((N + 1))
+    [[ -e "$f" ]] || continue
+    case "$f" in
+      *.warm) NW=$((NW + 1)) ;;
+      *)      N=$((N + 1)) ;;
+    esac
   done
 }
 
@@ -144,8 +152,15 @@ while :; do
       find "$LIVE" -type f -mmin "+${STALE_MIN}" -delete 2>/dev/null
     fi
     count_listeners
+    # 여운은 '진짜로 듣던 사람' 이 나갔을 때만 줍니다. 미리 데우기만 있다가
+    # 사라진 채널(=고르지 않은 채널)은 LAST_LISTENER 가 안 올라가 있으므로
+    # 곧바로 멈춥니다.
     (( N > 0 )) && LAST_LISTENER=$NOW
-    if (( N > 0 || NOW - LAST_LISTENER < LINGER )); then WANT=1; else WANT=0; fi
+    if (( N > 0 || NW > 0 || NOW - LAST_LISTENER < LINGER )); then
+      WANT=1
+    else
+      WANT=0
+    fi
   fi
 
   # --- 돌던 것이 죽었으면 거둡니다 ------------------------------------------
@@ -173,7 +188,11 @@ while :; do
     wait "$CHILD" 2>/dev/null
     CHILD=""
     state idle
-    say "듣는 사람이 없어 멈춥니다 (여운 ${LINGER}초 지남)"
+    if (( LAST_LISTENER > 0 )); then
+      say "듣는 사람이 없어 멈춥니다 (여운 ${LINGER}초 지남)"
+    else
+      say "안 고른 채널이라 바로 멈춥니다 (미리 데우기만 했음)"
+    fi
   fi
 
   # 쉬고 있을 때는 촘촘히 봅니다 — 사람이 채널을 누르고 소리가 날 때까지의

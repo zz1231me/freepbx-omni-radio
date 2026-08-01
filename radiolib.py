@@ -31,9 +31,11 @@ NUM_MARK = "; omni-radio-number"
 NUM_CTX = "from-internal-custom"
 
 # 지금 누가 무엇을 듣고 있나. 스트림 껍데기가 이 폴더만 보고 켜고 끕니다.
-#   live/<클래스>/<통화ID>   청취자 한 명당 파일 하나
+#   live/<클래스>/<통화ID>        진짜 청취자 (이 채널을 듣고 있음)
+#   live/<클래스>/<통화ID>.warm   미리 데우기 (메뉴를 보는 중, 아직 안 고름)
 #   status/<클래스>          up | idle | down | stopped  + 시각 + 사유
 LIVE = STATE / "live"
+WARM = ".warm"      # 미리 데우는 중이라는 표시 (진짜 청취자와 구분)
 STATUS = STATE / "status"
 
 BEGIN = ";;; ===== OMNI-RADIO BEGIN (radio-gen.py 가 만듭니다. 직접 고치지 마세요) ====="
@@ -179,8 +181,9 @@ def mark_all(classes: list[str], uid: str) -> None:
     데도 어차피 몇 초가 걸립니다. 그동안 미리 붙여 두면 어느 번호를 누르든
     소리가 곧바로 나옵니다.
 
-    비용은 메뉴를 보는 몇 초 동안만 채널 수만큼 받는 것뿐입니다. 번호를 고르는
-    순간 mark() 가 나머지를 거두고, 안 고르고 끊어도 h 확장에서 다 거둡니다.
+    표시를 .warm 으로 남기는 게 중요합니다. 껍데기는 이걸 '진짜 청취자' 와
+    구분해서, 고르지 않은 채널은 여운 없이 곧바로 멈춥니다. 안 그러면 통화
+    한 번에 고르지도 않은 채널 넷이 5분씩 더 받습니다.
     """
     if not uid:
         return
@@ -188,28 +191,30 @@ def mark_all(classes: list[str], uid: str) -> None:
     for cls in classes:
         d = LIVE / cls
         d.mkdir(parents=True, exist_ok=True)
-        (d / uid).write_text(str(int(time.time())), encoding="utf-8")
+        (d / (uid + WARM)).write_text(str(int(time.time())), encoding="utf-8")
         as_asterisk(d)
-        as_asterisk(d / uid)
+        as_asterisk(d / (uid + WARM))
     as_asterisk(LIVE)
 
 
 def unmark(uid: str) -> None:
-    """이 통화의 표시를 전부 거둡니다. 어느 채널이었는지 몰라도 됩니다."""
+    """이 통화의 표시를 전부 거둡니다 (미리 데우던 것까지).
+    어느 채널이었는지 몰라도 됩니다."""
     if not uid:
         return
     try:
         for d in LIVE.iterdir():
-            f = d / uid
-            if f.exists():
-                f.unlink(missing_ok=True)
+            for f in (d / uid, d / (uid + WARM)):
+                if f.exists():
+                    f.unlink(missing_ok=True)
     except OSError:
         pass
 
 
 def listeners(cls: str) -> int:
+    """진짜로 듣고 있는 사람 수. 미리 데우는 중인 것은 안 셉니다."""
     try:
-        return sum(1 for _ in (LIVE / cls).iterdir())
+        return sum(1 for f in (LIVE / cls).iterdir() if not f.name.endswith(WARM))
     except OSError:
         return 0
 
